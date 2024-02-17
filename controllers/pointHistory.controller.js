@@ -5,8 +5,7 @@ import Coupon from "../models/Coupons.model";
 import mongoose from "mongoose";
 import userModel from "../models/user.model";
 
-export const createPointlogs = async (userId, amount, type, description, status = 'pending', additionalInfo = {}) => {
-
+export const createPointlogs = async (userId, amount, type, description, status = "pending", additionalInfo = {}) => {
     let historyLog = {
         transactionId: new Date().getTime(),
         userId: userId,
@@ -14,12 +13,11 @@ export const createPointlogs = async (userId, amount, type, description, status 
         type: type,
         description: description,
         status: status,
-        additionalInfo: additionalInfo
+        additionalInfo: additionalInfo,
     };
 
     await new pointHistory(historyLog).save();
-}
-
+};
 
 export const getPointHistory = async (req, res, next) => {
     try {
@@ -35,8 +33,6 @@ export const getPointHistory = async (req, res, next) => {
             page = parseInt(req.query.page - 1);
         }
 
-
-
         if (req.query.type && pointTransactionType.includes(req.query.type)) {
             query.type = req.query.type;
         }
@@ -49,75 +45,73 @@ export const getPointHistory = async (req, res, next) => {
             query.userId = new mongoose.Types.ObjectId(req.query.userId);
         }
         if (req.query.q && req.query.q != "") {
-            query.transactionId = { $regex: '.*' + req.query.q + '.*' }
+            query.transactionId = { $regex: ".*" + req.query.q + ".*" };
         }
-        let pointHistoryArr = []
-        console.log(query, "points-history")
-        console.log(query, "query")
+        let pointHistoryArr = [];
+        console.log(query, "points-history");
+        console.log(query, "query");
         let pipeline = [
             {
-                '$match': query,
+                $match: query,
             },
             {
-                '$addFields': {
-                    'origionalId': '$_id'
-                }
-            }, {
-                '$group': {
-                    '_id': {
-                        'transactionId': '$transactionId'
-                    },
-                    'transactionId': {
-                        '$first': '$transactionId'
-                    },
-                    'userId': {
-                        '$first': '$userId'
-                    },
-                    'amount': {
-                        '$first': '$amount'
-                    },
-                    'description': {
-                        '$first': '$description'
-                    },
-                    'type': {
-                        '$first': '$type'
-                    },
-                    'status': {
-                        '$first': '$status'
-                    },
-                    'createdAt': {
-                        '$first': '$createdAt'
-                    },
-                    'updatedAt': {
-                        '$first': '$updatedAt'
-                    },
-                    'origionalId': {
-                        '$first': '$origionalId'
-                    }
-                }
-            }, {
-                '$addFields': {
-                    '_id': '$origionalId'
-                }
+                $addFields: {
+                    origionalId: "$_id",
+                },
             },
             {
-                '$sort': {
-                    createdAt: -1
-                }
+                $group: {
+                    _id: {
+                        transactionId: "$transactionId",
+                    },
+                    transactionId: {
+                        $first: "$transactionId",
+                    },
+                    userId: {
+                        $first: "$userId",
+                    },
+                    amount: {
+                        $first: "$amount",
+                    },
+                    description: {
+                        $first: "$description",
+                    },
+                    type: {
+                        $first: "$type",
+                    },
+                    status: {
+                        $first: "$status",
+                    },
+                    createdAt: {
+                        $first: "$createdAt",
+                    },
+                    updatedAt: {
+                        $first: "$updatedAt",
+                    },
+                    origionalId: {
+                        $first: "$origionalId",
+                    },
+                },
             },
             {
-                '$skip': page * limit,
+                $addFields: {
+                    _id: "$origionalId",
+                },
             },
             {
-                '$limit': limit
-            }
-        ]
+                $sort: {
+                    createdAt: -1,
+                },
+            },
+            {
+                $skip: page * limit,
+            },
+            {
+                $limit: limit,
+            },
+        ];
 
-
-
-
-
-        console.log(JSON.stringify(pipeline, null, 2), "pipeline")
+        console.log(JSON.stringify(pipeline, null, 2), "pipeline");
         pointHistoryArr = await pointHistory.aggregate(pipeline);
         // if (req.query.transactions) {
         //     console.log('asddfsads----------------------------Tasns');
@@ -133,14 +127,11 @@ export const getPointHistory = async (req, res, next) => {
             pointHistory.user = UserObj;
         }
         // console.log(pointHistoryArr, "pointHistoryArr")
-        res.status(200).json({ message: "List of points history", data: pointHistoryArr, "limit": limit, 'page': (page + 1), success: true });
+        res.status(200).json({ message: "List of points history", data: pointHistoryArr, limit: limit, page: page + 1, success: true });
     } catch (err) {
         next(err);
     }
-}
-
-
-
+};
 
 export const getPointHistoryMobile = async (req, res, next) => {
     try {
@@ -159,15 +150,17 @@ export const getPointHistoryMobile = async (req, res, next) => {
             query.userId = req.query.userId;
         }
 
+        let pointHistoryArr = await pointHistory
+            .find(query, {}, { skip: page * limit, limit: limit })
+            .sort({ createdAt: -1 })
+            .lean()
+            .exec();
 
-
-        let pointHistoryArr = await pointHistory.find(query, {}, { skip: page * limit, limit: limit }).sort({ "createdAt": -1 }).lean().exec();
-
-        res.status(200).json({ message: "List of points history", data: pointHistoryArr, "limit": limit, 'page': (page + 1), success: true });
+        res.status(200).json({ message: "List of points history", data: pointHistoryArr, limit: limit, page: page + 1, success: true });
     } catch (err) {
         next(err);
     }
-}
+};
 
 export const pointsRedeem = async (req, res, next) => {
     try {
@@ -193,58 +186,50 @@ export const pointsRedeem = async (req, res, next) => {
         }
         let additionalInfo = {
             transferType: req.body.type,
-            transferDeatils: req.body.transferDeatils
-        }
-        let pointDescription = points + ' Points are redeem from ' + req.body.type + ' Transfer';
-
+            transferDeatils: req.body.transferDeatils,
+        };
+        let pointDescription = points + " Points are redeem from " + req.body.type + " Transfer";
 
         let userPoints = {
-            points: UserObj.points - parseInt(points)
-        }
-
+            points: UserObj.points - parseInt(points),
+        };
 
         await Users.findByIdAndUpdate(req.user.userId, userPoints).exec();
-        if (req.body.type && req.body.type == 'CASH') {
+        if (req.body.type && req.body.type == "CASH") {
             let CouponObj = {
                 value: points,
-                name: 'TNP' + Math.floor(Date.now() / 1000) + (Math.random() + 1).toString(36).substring(7),
-                maximumNoOfUsersAllowed: 1
+                name: "TNP" + Math.floor(Date.now() / 1000) + (Math.random() + 1).toString(36).substring(7),
+                maximumNoOfUsersAllowed: 1,
             };
             additionalInfo.transferDeatils.couponCode = CouponObj.name;
-            let CouponRes = await new Coupon(CouponObj).save()
+            let CouponRes = await new Coupon(CouponObj).save();
             res.status(200).json({ message: "Points successfully cashed", success: true, data: CouponRes });
-        }
-        else {
+        } else {
             res.status(200).json({ message: "Points successfully redeem", success: true });
         }
-        console.log(additionalInfo, "additionalInfo")
-        await createPointlogs(req.user.userId, points, pointTransactionType.DEBIT, pointDescription, 'pending', additionalInfo);
-
-
+        console.log(additionalInfo, "additionalInfo");
+        await createPointlogs(req.user.userId, points, pointTransactionType.DEBIT, pointDescription, "pending", additionalInfo);
     } catch (err) {
         next(err);
     }
-
-
 };
-
 
 export const updatePointHistoryStatus = async (req, res, next) => {
     try {
-        console.log(req.params, "params")
+        console.log(req.params, "params");
         let pointHistoryObj = await pointHistory.findById(req.params.id).exec();
         if (!pointHistoryObj) {
             throw new Error("Transaction Not found");
         }
 
         if (req.body.status == "reject") {
-            console.log(pointHistoryObj.userId, "pointHistoryObj.userId")
-            let userObj = await userModel.findById(pointHistoryObj.userId).exec()
+            console.log(pointHistoryObj.userId, "pointHistoryObj.userId");
+            let userObj = await userModel.findById(pointHistoryObj.userId).exec();
             if (!userObj) {
-                throw new Error("User not found")
+                throw new Error("User not found");
             }
-            await userModel.findByIdAndUpdate(userObj._id, { $set: { points: userObj.points + pointHistoryObj.amount } }).exec()
-            await createPointlogs(pointHistoryObj.userId, pointHistoryObj.amount, pointTransactionType.CREDIT, `Points returned due to rejection of transaction by admin because ${req.body.reason}`, 'success', req.body.reason);
+            await userModel.findByIdAndUpdate(userObj._id, { $set: { points: userObj.points + pointHistoryObj.amount } }).exec();
+            await createPointlogs(pointHistoryObj.userId, pointHistoryObj.amount, pointTransactionType.CREDIT, `Points returned due to rejection of transaction by admin because ${req.body.reason}`, "success", req.body.reason);
         }
 
         await pointHistory.findByIdAndUpdate(req.params.id, { status: req.body.status, reason: req.body.reason }).exec();
@@ -254,8 +239,3 @@ export const updatePointHistoryStatus = async (req, res, next) => {
         next(err);
     }
 };
-
-
-
-
-

@@ -6,12 +6,10 @@ import Prize from "../models/prize.model";
 
 export const checkContest = async (date, time) => {
     try {
-
         let dateToBeComparedStart = new Date(date)
         dateToBeComparedStart.setHours(0, 0, 0)
         let dateToBeComparedEnd = new Date(date)
         dateToBeComparedEnd.setHours(23, 59, 59)
-        
         let allContests = await Contest.find({ endTime: `${time}`.replace("-",":"), endDate: { $gte: dateToBeComparedStart.getTime(), $lte: dateToBeComparedEnd.getTime() } }).exec()
         console.log(allContests,"litst of contest")
         for (const el of allContests) {
@@ -36,10 +34,6 @@ export const checkContest = async (date, time) => {
                 console.error(err)
             }
         }
-
-
-        console.log("CronSTrt111111111111111111111!!########################################################");
-
         console.log(dateToBeComparedStart.getTime(), time);
         console.log("CronEnd");
     } catch (error) {

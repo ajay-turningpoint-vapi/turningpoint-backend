@@ -8,5 +8,4 @@ router.get("/points-history-mobile", authorizeJwt, getPointHistoryMobile);
 router.patch("/update-pointstatus/:id", updatePointHistoryStatus);
 router.post("/redeem", authorizeJwt, pointsRedeem);
 
-
 export default router;

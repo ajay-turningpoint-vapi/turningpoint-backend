@@ -3,10 +3,15 @@ import { rolesObj } from "../helpers/Constants";
 
 let User = mongoose.Schema(
     {
-        email: { type: String },
-        phone: { type: String },
+        uid: { type: String, unique: true, required: true },
+        email: { type: String, unique: true },
+        phone: { type: String, required: true, unique: true },
         name: String,
-        shopName: String,
+        businessName: String,
+        contractor: {
+            contractorName: String,
+            businessName: String,
+        },
         adressLine: String,
         country: String,
         stateName: String,
@@ -14,8 +19,8 @@ let User = mongoose.Schema(
         address: String,
         password: { type: String },
         city: { type: String },
-        points: { type: Number, default: 0.0 },
-        isActive: { type: Boolean, default: false },
+        points: { type: Number, default: 100 },
+        isActive: { type: Boolean, default: true },
         role: {
             type: String,
             default: rolesObj.CARPENTER,
@@ -25,17 +30,20 @@ let User = mongoose.Schema(
         image: String,
         idFrontImage: { type: String },
         idBackImage: { type: String },
-        bankDetails: [{
-            banktype: String,
-            accountName: String,
-            accountNo: Number,
-            ifsc: String,
-            bank: String,
-            isActive: { type: Boolean, default: false },
-        }],
+        bankDetails: [
+            {
+                banktype: String,
+                accountName: String,
+                accountNo: Number,
+                ifsc: String,
+                bank: String,
+                isActive: { type: Boolean, default: true },
+            },
+        ],
         visitingCard: { type: String },
         shopImageArr: [{ shopImage: { type: String } }],
     },
+
     { timestamps: true }
 );
 

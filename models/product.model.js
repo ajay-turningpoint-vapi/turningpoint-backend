@@ -4,8 +4,8 @@ let product = mongoose.Schema(
     {
         name: String,
         // sku: String,
-        brand:String,
-        company:String,
+        brand: String,
+        company: String,
         // modelNumber: String,
         // categoryId: { type: mongoose.Types.ObjectId },
         // parentCategoryIdArr: [

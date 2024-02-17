@@ -41,15 +41,7 @@ export const addProduct = async (req, res, next) => {
 
 export const getAllProducts = async (req, res, next) => {
     try {
-        let productArr = await Product.find().lean().exec();
-        // for (let el of productArr) {
-        //     let stockObj = await Inventory.findOne({ productId: el._id }).lean().exec();
-        //     if (stockObj) {
-        //         el.stock = stockObj.stock;
-        //     } else {
-        //         el.stock = 0;
-        //     }
-        // }
+        let productArr = await Product.find().sort({ _id: -1 }).lean().exec();
         res.status(200).json({ message: "products", data: productArr, success: true });
     } catch (error) {
         console.error(error);
@@ -62,7 +54,6 @@ export const deleteProductById = async (req, res, next) => {
         let productObj = await Product.findByIdAndDelete(req.params.id).exec();
         // if()
         res.status(200).json({ message: "product Deleted", success: true });
-
     } catch (error) {
         console.error(error);
         next(error);
