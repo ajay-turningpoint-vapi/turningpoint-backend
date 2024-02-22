@@ -25,18 +25,18 @@ export const googleLogin = async (req, res) => {
 
         if (existingUser) {
             // If the user already exists, update the fields
-            await Users.findOneAndUpdate(
-                { uid },
-                {
-                    $set: {
-                        uid,
-                        name,
-                        image: picture,
-                        email,
-                    },
-                },
-                { new: true }
-            );
+            // await Users.findOneAndUpdate(
+            //     { uid },
+            //     {
+            //         $set: {
+            //             uid,
+            //             name,
+            //             image: picture,
+            //             email,
+            //         },
+            //     },
+            //     { new: true }
+            // );
 
             let accessToken = await generateAccessJwt({
                 userId: existingUser?._id,
@@ -246,7 +246,7 @@ export const getContractors = async (req, res, next) => {
         let UsersArr = await Users.aggregate(UsersPipeline);
 
         // Extracting only the 'name' and 'shopName' fields
-        const namesAndShopNames = UsersArr.map((user) => ({ name: user.name, shopName: user.shopName }));
+        const namesAndShopNames = UsersArr.map((user) => ({ name: user.name, businessName: user.businessName }));
 
         console.log(namesAndShopNames);
 

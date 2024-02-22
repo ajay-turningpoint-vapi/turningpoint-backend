@@ -9,10 +9,10 @@ let User = mongoose.Schema(
         name: String,
         businessName: String,
         contractor: {
-            contractorName: String,
+            name: String,
             businessName: String,
         },
-        adressLine: String,
+        addressLine: String,
         country: String,
         stateName: String,
         pincode: String,

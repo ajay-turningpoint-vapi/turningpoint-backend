@@ -22,13 +22,12 @@ import couponRouter from "./routes/Coupons.routes";
 import pointHistoryRouter from "./routes/pointHistory.routes";
 import contestRouter from "./routes/contest.routes";
 import reelsRouter from "./routes/reels.routes";
+import emailRouter from "./routes/email.routes";
 import reelsLikesRouter from "./routes/ReelLikes.routes";
-import { format } from 'date-fns'
+import { format } from "date-fns";
 
-const schedule = require('node-schedule');
-
-
-
+import nodemailer from "nodemailer";
+const schedule = require("node-schedule");
 
 //routes
 import usersRouter from "./routes/users.routes";
@@ -36,6 +35,7 @@ import wishlist from "./routes/wishlist.routes";
 import { checkContest } from "./Services/ContestCron";
 
 const app = express();
+
 app.use(cors());
 mongoose.connect(CONFIG.MONGOURI, { useNewUrlParser: true, useUnifiedTopology: true }, (err) => {
     if (err) {
@@ -71,12 +71,13 @@ app.use("/coupon", couponRouter);
 app.use("/points", pointHistoryRouter);
 app.use("/productReview", productReviewRouter);
 app.use("/mail", mailRouter);
+app.use("/email", emailRouter);
 
-const job = schedule.scheduleJob('*/1 * * * *', function () {
-    let date = format(new Date(), 'yyyy-MM-dd')
-    let time = format(new Date(), 'HH-mm')
-    console.log("RUNNING", date, time)
-    checkContest(date, time)
+const job = schedule.scheduleJob("*/1 * * * *", function () {
+    let date = format(new Date(), "yyyy-MM-dd");
+    let time = format(new Date(), "HH-mm");
+    console.log("RUNNING", date, time);
+    checkContest(date, time);
 });
 
 app.use(errorHandler);

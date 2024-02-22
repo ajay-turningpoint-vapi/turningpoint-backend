@@ -21,7 +21,7 @@ export const UserList = (payload) => {
                 role: 1,
                 firstName: 1,
                 lastName: 1,
-                shopName: 1,
+                businessName: 1,
                 dob: 1,
                 country: 1,
                 stateName: 1,
