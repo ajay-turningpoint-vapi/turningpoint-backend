@@ -32,6 +32,45 @@ export const addCoupons = async (req, res, next) => {
     }
 };
 
+export const generateCoupon = async (req, res, next) => {
+    try {
+        // Ensure the request body has the required fields
+        if (!req.body.points) {
+            throw new Error("Please provide the number of points to generate a coupon.");
+        }
+
+        // Check if the user has enough points
+        const userObj = await Users.findById(req.user.userId).exec();
+        const pointsToGenerate = parseInt(req.body.points);
+
+        if (!userObj || userObj.points < pointsToGenerate) {
+            throw new Error("Insufficient points to generate a coupon.");
+        }
+
+        // Generate a single coupon
+        const couponCode = await generateCouponCode();
+        const couponData = {
+            name: couponCode,
+            value: pointsToGenerate, // You can adjust this based on your requirements
+            count: 1,
+            maximumNoOfUsersAllowed: 1,
+            userId: req.user.userId, // Assuming you want to associate the generated coupon with the user
+        };
+
+        // Subtract points from the user
+        const updatedUserPoints = userObj.points - pointsToGenerate;
+        await Users.findByIdAndUpdate(req.user.userId, { points: updatedUserPoints }).exec();
+
+        // Insert the generated coupon into the database
+        const result = await Coupon.create(couponData);
+
+        res.status(200).json({ message: "Coupon Generated", data: result, success: true });
+    } catch (err) {
+        console.error(err);
+        next(err);
+    }
+};
+
 export const getAllCoupons = async (req, res, next) => {
     try {
         let query = {};
@@ -163,40 +202,33 @@ export const addMultipleCoupons = async (req, res, next) => {
         let coupons = req.body.coupons;
         let totalCount = 0;
         let totalAmount = 0;
-       
+
         for (const coupon of coupons) {
             totalCount += parseInt(coupon.count);
             totalAmount += parseInt(coupon.count * coupon.value);
         }
 
-
-        console.log("TotalAmt", req.body.amount, "TotalCount", req.body.count,"totalCount",totalCount,"totalAmount",totalAmount);
         if (totalAmount > req.body.amount) {
             throw new Error("coupon values and their count must be less than total coupon count");
         }
-
         if (totalCount > req.body.count) {
             throw new Error("number of coupons must be less than total coupons");
         }
         let couponArray = [];
-
+        let forLoopCouponArray = [];
         for (const coupon of coupons) {
-            while (coupon.count != 0) {
-                let newOBject = { ...coupon };
-                newOBject.name = await generateCouponCode();
-                couponArray.push(newOBject);
-                coupon.count--;
+            while (parseInt(coupon.count) !== 0) {
+                let newObject = _.cloneDeep(coupon);
+                newObject.name = await generateCouponCode();
+                couponArray.push(newObject);
+                coupon.count = (parseInt(coupon.count) - 1).toString();
             }
         }
-
         let remainingCoupon = req.body.count - couponArray.length;
         console.log(remainingCoupon);
         if (remainingCoupon > 0) {
             for (let index = 0; index < remainingCoupon; index++) {
-                let blankCoupon = new Object();
-                blankCoupon.value = 0;
-                blankCoupon.count = 0;
-                blankCoupon.name = await generateCouponCode();
+                let blankCoupon = { value: 0, count: 0, name: await generateCouponCode() };
                 couponArray.push(blankCoupon);
             }
         }
@@ -207,21 +239,108 @@ export const addMultipleCoupons = async (req, res, next) => {
             couponData.maximumNoOfUsersAllowed = 1;
             couponData.productId = req.body.productId;
             couponData.productName = productObj.name;
-            // await new Coupon(couponData).save()
             finalCouponsArray.push(couponData);
             couponArray.splice(element, 1);
         }
-
         console.log(finalCouponsArray, "COUPON_MULTIPLE_ADD_SUCCESS");
+        const totalValueAndCount = finalCouponsArray.reduce(
+            (acc, coupon) => {
+                return {
+                    value: acc.value + parseInt(coupon.value),
+                    count: acc.count + parseInt(coupon.count),
+                };
+            },
+            { value: 0, count: 0 }
+        );
+
+        console.log(req.body.coupons);
+
+        console.log("forLoopCouponArray", forLoopCouponArray, "length", forLoopCouponArray.length);
+        if (totalValueAndCount.value !== parseInt(req.body.amount) || totalValueAndCount.count !== parseInt(req.body.count)) {
+            throw new Error("Total value and count mismatch");
+        }
+
         let result = await Coupon.insertMany(finalCouponsArray);
         let tempArr = _.cloneDeep(result);
-
         res.status(200).json({ message: "Coupon Added", data: [...tempArr], success: true });
     } catch (err) {
         console.error(err);
         next(err);
     }
 };
+
+// export const addMultipleCoupons = async (req, res, next) => {
+//     try {
+//         if (!req.body.hasOwnProperty("coupons") || req.body.coupons.length == 0) {
+//             throw new Error("Please fill coupon values and their count");
+//         }
+
+//         let productObj = await productModel.findById(req.body.productId).exec();
+//         let coupons = req.body.coupons;
+//         let totalCount = 0;
+//         let totalAmount = 0;
+
+//         for (const coupon of coupons) {
+//             totalCount += parseInt(coupon.count);
+//             totalAmount += parseInt(coupon.count * coupon.value);
+//         }
+
+//         console.log("TotalAmt", req.body.amount, "TotalCount", req.body.count, "totalCount", totalCount, "totalAmount", totalAmount);
+//         if (totalAmount > req.body.amount) {
+//             throw new Error("coupon values and their count must be less than total coupon count");
+//         }
+
+//         if (totalCount > req.body.count) {
+//             throw new Error("number of coupons must be less than total coupons");
+//         }
+//         let couponArray = [];
+
+//         for (const coupon of coupons) {
+//             while (coupon.count != 0) {
+//                 let newOBject = { ...coupon };
+//                 newOBject.name = await generateCouponCode();
+//                 couponArray.push(newOBject);
+//                 coupon.count--;
+//             }
+//         }
+
+//         if (couponArray.length !== req.body.count) {
+//             throw new Error("The total count in the coupons array does not match the overall count");
+//         }
+
+//         let remainingCoupon = req.body.count - couponArray.length;
+//         console.log(remainingCoupon);
+//         if (remainingCoupon > 0) {
+//             for (let index = 0; index < remainingCoupon; index++) {
+//                 let blankCoupon = new Object();
+//                 blankCoupon.value = 0;
+//                 blankCoupon.count = 0;
+//                 blankCoupon.name = await generateCouponCode();
+//                 couponArray.push(blankCoupon);
+//             }
+//         }
+//         let finalCouponsArray = [];
+//         for (let index = 0; index < req.body.count; index++) {
+//             const element = Math.floor(Math.random() * couponArray.length);
+//             let couponData = couponArray[element];
+//             couponData.maximumNoOfUsersAllowed = 1;
+//             couponData.productId = req.body.productId;
+//             couponData.productName = productObj.name;
+//             // await new Coupon(couponData).save()
+//             finalCouponsArray.push(couponData);
+//             couponArray.splice(element, 1);
+//         }
+
+//         console.log(finalCouponsArray, "COUPON_MULTIPLE_ADD_SUCCESS");
+//         let result = await Coupon.insertMany(finalCouponsArray);
+//         let tempArr = _.cloneDeep(result);
+
+//         res.status(200).json({ message: "Coupon Added", data: [...tempArr], success: true });
+//     } catch (err) {
+//         console.error(err);
+//         next(err);
+//     }
+// };
 
 export const applyCoupon = async (req, res, next) => {
     try {
@@ -237,18 +356,19 @@ export const applyCoupon = async (req, res, next) => {
             .exec();
         let UserObj = await Users.findById(req.user.userId).lean().exec();
         if (!CouponObj) {
-            throw new Error("Coupon not found");
+            return res.status(700).json({ message: "Coupon not found" });
         }
 
         if (CouponObj.maximumNoOfUsersAllowed !== 1) {
-            throw new Error("Coupon is already applied");
+            return res.status(700).json({ message: "Coupon has already been applied" });
         }
         await Coupon.findByIdAndUpdate(CouponObj._id, { maximumNoOfUsersAllowed: 0 }).exec();
         let points = CouponObj.value;
 
         if (CouponObj.value !== 0) {
             let pointDescription = "Coupon Earned " + points + " Points";
-            await createPointlogs(req.user.userId, points, pointTransactionType.CREDIT, pointDescription, "success");
+            let mobileDescription = "Coupon";
+            await createPointlogs(req.user.userId, points, pointTransactionType.CREDIT, pointDescription, mobileDescription, "success");
             let userPoints = {
                 points: UserObj.points + parseInt(points),
             };

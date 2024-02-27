@@ -5,6 +5,4 @@ let router = express.Router();
 
 router.post("/like", authorizeJwt, likeReels);
 router.post("/getLikeCount", authorizeJwt, getLikeCount);
-
-
 export default router;

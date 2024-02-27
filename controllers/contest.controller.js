@@ -126,7 +126,6 @@ export const getContest = async (req, res, next) => {
                     },
                 },
             },
-
             {
                 $match: {
                     $and: [
@@ -149,17 +148,131 @@ export const getContest = async (req, res, next) => {
 
         let getContest = await Contest.aggregate(pipeline);
 
+        // Iterate over each contest to fetch additional data
         for (let Contestobj of getContest) {
             if (Contestobj?._id) {
+                // Fetch prize data for each contest
                 let prizeContestArry = await Prize.find({ contestId: `${Contestobj._id}` }).exec();
                 Contestobj.prizeArr = prizeContestArry;
+
+                // Check if the user has joined the contest
+                if (req.user.userId) {
+                    let userJoinStatus = await userContest.exists({
+                        contestId: Contestobj._id,
+                        userId: req.user.userId,
+                        status: "join",
+                    });
+                    Contestobj.userJoinStatus = userJoinStatus != null;
+                }
             }
         }
+
+        // Respond with the modified JSON object containing information about the contests and associated prize arrays
         res.status(200).json({ message: "getContest", data: getContest, success: true });
     } catch (err) {
         next(err);
     }
 };
+
+// export const getContest = async (req, res, next) => {
+//     try {
+//         console.log(req.query, "query");
+
+//         let pipeline = [
+//             {
+//                 $addFields: {
+//                     combinedStartDateTime: {
+//                         $dateFromString: {
+//                             dateString: {
+//                                 $concat: [
+//                                     {
+//                                         $dateToString: {
+//                                             date: "$startDate",
+//                                             format: "%Y-%m-%d",
+//                                         },
+//                                     },
+//                                     "T",
+//                                     "$startTime",
+//                                     ":00",
+//                                 ],
+//                             },
+//                             timezone: "Asia/Kolkata",
+//                         },
+//                     },
+//                     combinedEndDateTime: {
+//                         $dateFromString: {
+//                             dateString: {
+//                                 $concat: [
+//                                     {
+//                                         $dateToString: {
+//                                             date: "$endDate",
+//                                             format: "%Y-%m-%d",
+//                                         },
+//                                     },
+//                                     "T",
+//                                     "$endTime",
+//                                     ":00",
+//                                 ],
+//                             },
+//                             timezone: "Asia/Kolkata",
+//                         },
+//                     },
+//                 },
+//             },
+//             {
+//                 $addFields: {
+//                     status: {
+//                         $cond: {
+//                             if: {
+//                                 $and: [
+//                                     {
+//                                         $gt: ["$combinedEndDateTime", new Date()],
+//                                     },
+//                                     {
+//                                         $lt: ["$combinedStartDateTime", new Date()],
+//                                     },
+//                                 ],
+//                             },
+//                             then: "ACTIVE",
+//                             else: "INACTIVE",
+//                         },
+//                     },
+//                 },
+//             },
+
+//             {
+//                 $match: {
+//                     $and: [
+//                         req.query.admin
+//                             ? {}
+//                             : {
+//                                   combinedEndDateTime: {
+//                                       $gt: new Date(),
+//                                   },
+//                               },
+//                         {
+//                             combinedStartDateTime: {
+//                                 $lt: new Date(),
+//                             },
+//                         },
+//                     ],
+//                 },
+//             },
+//         ];
+
+//         let getContest = await Contest.aggregate(pipeline);
+
+//         for (let Contestobj of getContest) {
+//             if (Contestobj?._id) {
+//                 let prizeContestArry = await Prize.find({ contestId: `${Contestobj._id}` }).exec();
+//                 Contestobj.prizeArr = prizeContestArry;
+//             }
+//         }
+//         res.status(200).json({ message: "getContest", data: getContest, success: true });
+//     } catch (err) {
+//         next(err);
+//     }
+// };
 
 export const updateById = async (req, res, next) => {
     try {
@@ -172,7 +285,7 @@ export const updateById = async (req, res, next) => {
         console.log(ContestObj);
         if (req.body?.prizeArr && req.body?.prizeArr?.length > 0) {
             let rank = 1;
-            console.log("przei loop fdgfdgf");
+            console.log("prze loop fdgfdgf");
             for (const prize of req.body?.prizeArr) {
                 let prizeObj = {
                     rank: parseInt(rank),
@@ -220,23 +333,39 @@ export const joinContest = async (req, res, next) => {
 
         let UserObj = await userModel.findById(req.user.userId).lean().exec();
         if (!UserObj) throw { status: 400, message: "User Not Found" };
+
         let points = ContestObj.points;
         if (UserObj.points <= 0 || UserObj.points < points) {
             throw { status: 400, message: "Insufficient balance" };
         }
 
+        // Check if the user has already joined the contest
+        let existingJoin = await userContest.findOne({
+            contestId: ContestObj._id,
+            userId: UserObj._id,
+            userJoinStatus: true,
+        });
+
+        if (existingJoin) {
+            throw { status: 400, message: "User already joined the contest" };
+        }
+
         let userJoin = ContestObj.userJoin;
 
         console.log(ContestObj);
+
         let userContestObj = {
             contestId: ContestObj._id,
             userId: UserObj._id,
+            userJoinStatus: true, // Set userJoinStatus to true when joining
         };
+
         let userContestRes = await userContest(userContestObj).save();
 
         if (userContestRes) {
             let pointDescription = ContestObj.name + " Contest Joined with " + points + " Points";
-            await createPointlogs(req.user.userId, points, pointTransactionType.DEBIT, pointDescription, "success");
+            let mobileDescription = "Contest";
+            await createPointlogs(req.user.userId, points, pointTransactionType.DEBIT, pointDescription, mobileDescription, "success");
             let userPoints = {
                 points: UserObj.points - parseInt(points),
             };
@@ -248,11 +377,51 @@ export const joinContest = async (req, res, next) => {
                 throw { status: 400, message: "Insufficient balance" };
             }
         }
-        res.status(200).json({ message: "Contest Joined Sucessfully", success: true });
+
+        res.status(200).json({ message: "Contest Joined Successfully", success: true });
     } catch (err) {
         next(err);
     }
 };
+
+// export const joinContest = async (req, res, next) => {
+//     try {
+//         let ContestObj = await Contest.findById(req.params.id).exec();
+//         if (!ContestObj) throw { status: 400, message: "Contest Not Found" };
+
+//         let UserObj = await userModel.findById(req.user.userId).lean().exec();
+//         if (!UserObj) throw { status: 400, message: "User Not Found" };
+//         let points = ContestObj.points;
+//         if (UserObj.points <= 0 || UserObj.points < points) {
+//             throw { status: 400, message: "Insufficient balance" };
+//         }
+//         let userJoin = ContestObj.userJoin;
+//         console.log(ContestObj);
+//         let userContestObj = {
+//             contestId: ContestObj._id,
+//             userId: UserObj._id,
+//         };
+//         let userContestRes = await userContest(userContestObj).save();
+//         if (userContestRes) {
+//             let pointDescription = ContestObj.name + " Contest Joined with " + points + " Points";
+//             let mobileDescription = "Contest";
+//             await createPointlogs(req.user.userId, points, pointTransactionType.DEBIT, pointDescription, mobileDescription, "success");
+//             let userPoints = {
+//                 points: UserObj.points - parseInt(points),
+//             };
+//             if (userPoints?.points >= 0) {
+//                 console.log(userPoints);
+//                 await userModel.findByIdAndUpdate(req.user.userId, userPoints).exec();
+//                 await Contest.findByIdAndUpdate(req.params.id, { userJoin: parseInt(userJoin) + 1 }).exec();
+//             } else {
+//                 throw { status: 400, message: "Insufficient balance" };
+//             }
+//         }
+//         res.status(200).json({ message: "Contest Joined Sucessfully", success: true });
+//     } catch (err) {
+//         next(err);
+//     }
+// };
 
 export const myContests = async (req, res, next) => {
     try {

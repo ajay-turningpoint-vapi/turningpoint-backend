@@ -32,7 +32,6 @@ router.get("/getUsers", getUsers);
 router.get("/getContractors", getContractors);
 router.get("/getUserById/:id", authorizeJwt, getUserById);
 router.get("/getUserContests", getUserContests);
-
 router.delete("/deleteById/:id", deleteUser);
 
 //admin =

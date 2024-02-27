@@ -23,10 +23,10 @@ import pointHistoryRouter from "./routes/pointHistory.routes";
 import contestRouter from "./routes/contest.routes";
 import reelsRouter from "./routes/reels.routes";
 import emailRouter from "./routes/email.routes";
+import geofenceRouter from "./routes/geofence.routes";
 import reelsLikesRouter from "./routes/ReelLikes.routes";
+import activityLogsRouter from "./routes/activityLogs.routes";
 import { format } from "date-fns";
-
-import nodemailer from "nodemailer";
 const schedule = require("node-schedule");
 
 //routes
@@ -66,12 +66,13 @@ app.use("/tax", TaxRouter);
 app.use("/contest", contestRouter);
 app.use("/reels", reelsRouter);
 app.use("/reelLike", reelsLikesRouter);
-
 app.use("/coupon", couponRouter);
 app.use("/points", pointHistoryRouter);
 app.use("/productReview", productReviewRouter);
 app.use("/mail", mailRouter);
 app.use("/email", emailRouter);
+app.use("/map", geofenceRouter);
+app.use("/logs", activityLogsRouter);
 
 const job = schedule.scheduleJob("*/1 * * * *", function () {
     let date = format(new Date(), "yyyy-MM-dd");

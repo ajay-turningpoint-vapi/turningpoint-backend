@@ -1,87 +1,82 @@
-let QRCode = require("qrcode")
-const fs = require('fs');
-const archiver = require('archiver');
+let QRCode = require("qrcode");
+const fs = require("fs");
+const archiver = require("archiver");
 var path = require("path");
-const location = path.join(__dirname, "..", "public", 'qr');
-import { customAlphabet } from 'nanoid'
-const nanoid = customAlphabet('1234567890', 10)
+const location = path.join(__dirname, "..", "public", "qr");
+import { customAlphabet } from "nanoid";
+const nanoid = customAlphabet("1234567890", 10);
 
-import CouponsModel from '../models/Coupons.model';
+import CouponsModel from "../models/Coupons.model";
 
 const generateCouponCode = async () => {
-    let Couponintial = 'TNP';
+    let Couponintial = "TNP";
     let check = true;
-    let couponCode = ""
+    let couponCode = "";
     while (check) {
-
-        let tempId = await nanoid()
-        console.log(tempId)
-        let tempCode = `${Couponintial}${tempId}`
+        let tempId = await nanoid();
+        console.log(tempId);
+        let tempCode = `${Couponintial}${tempId}`;
         let existCheck = await CouponsModel.findOne({ name: tempCode }).exec();
         if (!existCheck) {
             check = false;
-            couponCode = tempCode
+            couponCode = tempCode;
         }
     }
-    return couponCode
-}
+    return couponCode;
+};
 
 const QrGenerator = async (obj) => {
-    let fileName = `/${new Date().getTime()}.png`
-    let locationVal = location + fileName
+    let fileName = `/${new Date().getTime()}.png`;
+    let locationVal = location + fileName;
 
     let qr = await QRCode.toFile(locationVal, obj);
-    return { locationVal, fileName }
-}
-
+    return { locationVal, fileName };
+};
 
 const ZipGenerator = (locationArr) => {
     return new Promise((resolve, reject) => {
         try {
-
             // require modules
 
             // create a file to stream archive data to.
 
-            let zipFileName = `/${new Date().getTime()}.zip`
-            let zipLocation = location + zipFileName
+            let zipFileName = `/${new Date().getTime()}.zip`;
+            let zipLocation = location + zipFileName;
 
             const output = fs.createWriteStream(zipLocation);
-            const archive = archiver('zip', {
-                zlib: { level: 9 } // Sets the compression level.
+            const archive = archiver("zip", {
+                zlib: { level: 9 }, // Sets the compression level.
             });
 
             // listen for all archive data to be written
             // 'close' event is fired only when a file descriptor is involved
-            output.on('close', function () {
-                console.log(archive.pointer() + ' total bytes');
-                console.log('archiver has been finalized and the output file descriptor has closed.');
-                resolve({ zipFileName, zipLocation })
+            output.on("close", function () {
+                console.log(archive.pointer() + " total bytes");
+                console.log("archiver has been finalized and the output file descriptor has closed.");
+                resolve({ zipFileName, zipLocation });
             });
 
             // This event is fired when the data source is drained no matter what was the data source.
             // It is not part of this library but rather from the NodeJS Stream API.
             // @see: https://nodejs.org/api/stream.html#stream_event_end
-            output.on('end', function () {
-                console.log('Data has been drained');
+            output.on("end", function () {
+                console.log("Data has been drained");
             });
 
             // good practice to catch warnings (ie stat failures and other non-blocking errors)
-            archive.on('warning', function (err) {
-
+            archive.on("warning", function (err) {
                 reject(err);
 
-                if (err.code === 'ENOENT') {
+                if (err.code === "ENOENT") {
                     // log warning
                 } else {
                     // throw error
                     // throw err;
-
                 }
             });
 
             // good practice to catch this error explicitly
-            archive.on('error', function (err) {
+            archive.on("error", function (err) {
                 reject(err);
             });
 
@@ -94,18 +89,11 @@ const ZipGenerator = (locationArr) => {
             }
 
             archive.finalize();
-
-
         } catch (error) {
-            reject(error)
+            reject(error);
         }
-
-
-
-
-    })
-
-}
+    });
+};
 
 const deleteFile = (url) => {
     fs.unlink(url, (err) => {
@@ -114,8 +102,6 @@ const deleteFile = (url) => {
         }
         console.log("File is deleted.");
     });
+};
 
-}
-
-
-module.exports = { QrGenerator, ZipGenerator, deleteFile, generateCouponCode }
+module.exports = { QrGenerator, ZipGenerator, deleteFile, generateCouponCode };

@@ -18,4 +18,4 @@ router.post("/luckyDraw/:id", authorizeJwt, luckyDraw);
 router.get("/previousContest", authorizeJwt, previousContest);
 router.get("/currentContest", authorizeJwt, currentContest);
 
- export default router;
+export default router;

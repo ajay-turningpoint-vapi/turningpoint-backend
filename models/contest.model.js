@@ -6,7 +6,7 @@ let Contest = mongoose.Schema({
     contestId: String,
     subtitle: String,
     image: { type: String },
-    points:Number, // Min Points to Enter into contest
+    points:Number, 
     description:String,
     rulesArr:[],
     startDate:Date,

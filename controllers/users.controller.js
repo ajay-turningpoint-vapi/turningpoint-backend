@@ -5,9 +5,9 @@ import { storeFileAndReturnNameBase64 } from "../helpers/fileSystem";
 import { generateAccessJwt } from "../helpers/Jwt";
 import { ValidateEmail, validNo } from "../helpers/Validators";
 import Users from "../models/user.model";
-import SignIn from "../models/signIn.model";
 import UserContest from "../models/userContest";
 import Contest from "../models/contest.model";
+
 import mongoose from "mongoose";
 import pointHistoryModel from "../models/pointHistory.model";
 import admin from "../helpers/firebase";
@@ -84,8 +84,6 @@ export const registerUser = async (req, res, next) => {
 
         let accessToken = await generateAccessJwt({
             userId: newUser?._id,
-            role: newUser?.role,
-            name: newUser?.name,
             phone: newUser?.phone,
             email: newUser?.email,
         });
@@ -160,15 +158,15 @@ export const updateUserProfile = async (req, res, next) => {
             }
         }
 
-        if (req.body.frontImage) {
-            req.body.idFrontImage = await storeFileAndReturnNameBase64(req.body.frontImage);
+        if (req.body.idFrontImage) {
+            req.body.idFrontImage = await storeFileAndReturnNameBase64(req.body.idFrontImage);
         }
 
-        if (req.body.backImage) {
-            req.body.idBackImage = await storeFileAndReturnNameBase64(req.body.backImage);
+        if (req.body.idBackImage) {
+            req.body.idBackImage = await storeFileAndReturnNameBase64(req.body.idBackImage);
         }
 
-        console.log(req.body.bankDetails);
+        console.log("after", req.body);
 
         if (req.body.bankDetails) {
             let bandDetails = [
@@ -181,9 +179,10 @@ export const updateUserProfile = async (req, res, next) => {
                 },
             ];
             req.body.bankDetails = bandDetails;
+            req.body.kycStatus = false;
         }
         userObj = await Users.findByIdAndUpdate(req.user.userId, req.body).exec();
-        res.status(200).json({ message: "Profile Updated Successfully", success: true });
+        res.status(200).json({ message: "Profile Updated Successfully", data: userObj, success: true });
     } catch (err) {
         next(err);
     }
@@ -234,21 +233,28 @@ export const getUsers = async (req, res, next) => {
         next(error);
     }
 };
+
 export const getContractors = async (req, res, next) => {
     try {
-        console.log(req.query);
+        const currentContractorEmail = req.body.email;
+
         const UsersPipeline = UserList(req.query);
+
         UsersPipeline.push({
             $match: {
                 role: rolesObj.CONTRACTOR,
+                email: { $ne: currentContractorEmail },
+            },
+        });
+
+        UsersPipeline.push({
+            $sort: {
+                name: 1,
             },
         });
         let UsersArr = await Users.aggregate(UsersPipeline);
 
-        // Extracting only the 'name' and 'shopName' fields
         const namesAndShopNames = UsersArr.map((user) => ({ name: user.name, businessName: user.businessName }));
-
-        console.log(namesAndShopNames);
 
         res.status(200).json({ message: "Contractors", data: namesAndShopNames, success: true });
     } catch (error) {
@@ -256,6 +262,25 @@ export const getContractors = async (req, res, next) => {
         next(error);
     }
 };
+
+// export const getContractors = async (req, res, next) => {
+//     try {
+//         console.log(req.query);
+//         const UsersPipeline = UserList(req.query);
+//         UsersPipeline.push({
+//             $match: {
+//                 role: rolesObj.CONTRACTOR,
+//             },
+//         });
+//         let UsersArr = await Users.aggregate(UsersPipeline);
+//         const namesAndShopNames = UsersArr.map((user) => ({ name: user.name, businessName: user.businessName }));
+
+//         res.status(200).json({ message: "Contractors", data: namesAndShopNames, success: true });
+//     } catch (error) {
+//         console.error(error);
+//         next(error);
+//     }
+// };
 
 // export const getContractors = async (req, res, next) => {
 //     try {
@@ -532,14 +557,6 @@ export const getUserStatsReport = async (req, res, next) => {
         };
         console.log(obj);
 
-        // for (let contest of UserContests) {
-        //     if (contest.userId) {
-        //         contest.userObj = await Users.findById(contest.userId).exec();
-        //     }
-        //     if (contest.contestId) {
-        //         contest.contestObj = await Contest.findById(contest.contestId).exec();
-        //     }
-        // }
         res.status(200).json({ message: "User Contest", data: obj, success: true });
     } catch (error) {
         console.error(error);

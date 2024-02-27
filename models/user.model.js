@@ -28,18 +28,24 @@ let User = mongoose.Schema(
         panNo: { type: String },
         aadharNo: { type: Number },
         image: String,
-        idFrontImage: { type: String },
-        idBackImage: { type: String },
+        idFrontImage: String,
+        idBackImage: String,
         bankDetails: [
             {
                 banktype: String,
                 accountName: String,
-                accountNo: Number,
+                accountNo: String,
                 ifsc: String,
                 bank: String,
                 isActive: { type: Boolean, default: true },
+               
             },
         ],
+        upiId: String,
+        kycStatus: {
+            type: Boolean,
+            default: null,
+        },
         visitingCard: { type: String },
         shopImageArr: [{ shopImage: { type: String } }],
     },

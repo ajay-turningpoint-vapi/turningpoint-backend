@@ -15,3 +15,6 @@ export const storeFileAndReturnNameBase64 = async (base64) => {
         });
     });
 };
+
+
+

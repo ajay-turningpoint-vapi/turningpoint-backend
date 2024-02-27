@@ -1,9 +1,8 @@
 import { storeFileAndReturnNameBase64 } from "../helpers/fileSystem";
 import Reels from "../models/reels.model";
 import ReelLikes from "../models/reelLikes.model";
-import { isValid } from "../helpers/Validators";
-import { create } from "archiver";
-import jwt from "jsonwebtoken";
+import ActivityLog from "../models/activityLogs.model";
+import mongoose from "mongoose";
 export const addReels = async (req, res, next) => {
     try {
         // if (!req.body.fileUrl) throw new Error("fileUrl is mandatory");
@@ -32,6 +31,82 @@ export const getReels = async (req, res, next) => {
         next(err);
     }
 };
+
+export const getReelsPaginated = async (req, res, next) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        let totalCount = await Reels.countDocuments();
+
+        if (totalCount === 0) {
+            return res.status(404).json({ message: "No reels found", success: false });
+        }
+
+        // Retrieve a random set of reels
+        let reelsArr = await Reels.aggregate([{ $sample: { size: 10 } }]); // Adjust the size as needed
+
+        // Fetch liked status for each reel and create a new array with modified structure
+        const reelsWithLikedStatus = await Promise.all(
+            reelsArr.map(async (reel) => {
+                const likedStatus = await ReelLikes.findOne({
+                    userId: req.user.userId,
+                    reelId: reel._id,
+                });
+
+                return {
+                    ...reel,
+                    likedByCurrentUser: likedStatus !== null, // Will be true or false
+                };
+            })
+        );
+
+        // Log the activity
+        await ActivityLog.create({
+            userId: req.user.userId,
+            type: "Watching Reels",
+        });
+
+        res.status(200).json({ message: "Reels Found", data: reelsWithLikedStatus, success: true });
+    } catch (err) {
+        console.error(err);
+        next(err);
+    }
+};
+
+// export const getReelsPaginated = async (req, res, next) => {
+//     try {
+//         if (!req.user) {
+//             return res.status(401).json({ message: "Unauthorized" });
+//         }
+
+//         let totalCount = await Reels.countDocuments();
+
+//         if (totalCount === 0) {
+//             return res.status(404).json({ message: "No reels found", success: false });
+//         }
+
+//         let reelsArr = await Reels.aggregate([
+//             {
+//                 $sample: {
+//                     size: totalCount,
+//                 },
+//             },
+//         ]);
+//         if (!reelsArr || reelsArr.length === 0) {
+//             return res.status(500).json({ message: "Error retrieving reels", success: false });
+//         }
+//         await ActivityLog.create({
+//             userId: req.user.userId,
+//             type: "Watching Reels",
+//         });
+//         res.status(200).json({ message: "Reels Found", data: reelsArr, success: true });
+//     } catch (err) {
+//         console.error(err);
+//         next(err);
+//     }
+// };
 
 // export const getReelsPaginated = async (req, res, next) => {
 //     try {
@@ -63,6 +138,11 @@ export const getReels = async (req, res, next) => {
 //             return res.status(401).json({ message: "Unauthorized" });
 //         }
 
+//         await ActivityLog.create({
+//             userId: req.user.userId,
+//             type: "Watching Reels",
+//         });
+
 //         const likedReelIds = await ReelLikes.find({ userId: req.user.userId }).distinct("reelId");
 
 //         Reels.find({ _id: { $nin: likedReelIds } }, (err, results) => {
@@ -72,6 +152,13 @@ export const getReels = async (req, res, next) => {
 //                 if (results.length === 0) {
 //                     return res.status(404).json({ message: "No matching reels found", success: false });
 //                 }
+
+//                 // Shuffle the results array randomly using Fisher-Yates algorithm
+//                 for (let i = results.length - 1; i > 0; i--) {
+//                     const j = Math.floor(Math.random() * (i + 1));
+//                     [results[i], results[j]] = [results[j], results[i]];
+//                 }
+
 //                 res.status(200).json({ message: "Reels Found", data: results, success: true });
 //             }
 //         });
@@ -79,36 +166,6 @@ export const getReels = async (req, res, next) => {
 //         next(err);
 //     }
 // };
-
-export const getReelsPaginated = async (req, res, next) => {
-    try {
-        if (!req.user) {
-            return res.status(401).json({ message: "Unauthorized" });
-        }
-
-        const likedReelIds = await ReelLikes.find({ userId: req.user.userId }).distinct("reelId");
-
-        Reels.find({ _id: { $nin: likedReelIds } }, (err, results) => {
-            if (err) {
-                return res.status(500).json({ message: "Error finding reels", success: false });
-            } else {
-                if (results.length === 0) {
-                    return res.status(404).json({ message: "No matching reels found", success: false });
-                }
-
-                // Shuffle the results array randomly using Fisher-Yates algorithm
-                for (let i = results.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [results[i], results[j]] = [results[j], results[i]];
-                }
-
-                res.status(200).json({ message: "Randomized Reels Found", data: results, success: true });
-            }
-        });
-    } catch (err) {
-        next(err);
-    }
-};
 
 export const updateById = async (req, res, next) => {
     try {
