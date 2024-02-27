@@ -50,7 +50,6 @@ app.use(express.json({ limit: "100mb" })); // parses the incoming json requests
 app.use(express.urlencoded({ extended: false, limit: "100mb", parameterLimit: 10000000 }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
-
 app.use("/", indexRouter);
 app.use("/users", usersRouter);
 app.use("/category", category);

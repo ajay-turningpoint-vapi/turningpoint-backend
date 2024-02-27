@@ -482,9 +482,11 @@ export const previousContest = async (req, res, next) => {
         currentDate.setDate(1);
         let previousFirstDate = currentDate;
         //for previous month last date
+
         currentDate = new Date();
         currentDate.setDate(0);
         let previousLastDate = currentDate;
+        console.log(previousFirstDate, previousLastDate);
         let ContestObj = await Contest.findOne({ status: "CLOSED", endDate: { $gte: previousFirstDate, $lte: previousLastDate } })
             .sort({ endDate: -1 })
             .lean()
@@ -492,9 +494,6 @@ export const previousContest = async (req, res, next) => {
         if (ContestObj) {
             let contestUsers = await userContest.find({ contestId: ContestObj._id, status: "win" }).lean().exec();
             let contestPrizes = await Prize.find({ contestId: ContestObj._id }).sort({ rank: 1 }).lean().exec();
-
-            console.log(contestUsers, "contestUsers");
-
             for (const user of contestPrizes) {
                 let contestPrizes = await userContest.findOne({ contestId: user.contestId, rank: user.rank, status: "win" }).lean().exec();
                 if (contestPrizes) {
