@@ -174,105 +174,105 @@ export const getContest = async (req, res, next) => {
     }
 };
 
-// export const getContest = async (req, res, next) => {
-//     try {
-//         console.log(req.query, "query");
+export const getContestAdmin = async (req, res, next) => {
+    try {
+        console.log(req.query, "query");
 
-//         let pipeline = [
-//             {
-//                 $addFields: {
-//                     combinedStartDateTime: {
-//                         $dateFromString: {
-//                             dateString: {
-//                                 $concat: [
-//                                     {
-//                                         $dateToString: {
-//                                             date: "$startDate",
-//                                             format: "%Y-%m-%d",
-//                                         },
-//                                     },
-//                                     "T",
-//                                     "$startTime",
-//                                     ":00",
-//                                 ],
-//                             },
-//                             timezone: "Asia/Kolkata",
-//                         },
-//                     },
-//                     combinedEndDateTime: {
-//                         $dateFromString: {
-//                             dateString: {
-//                                 $concat: [
-//                                     {
-//                                         $dateToString: {
-//                                             date: "$endDate",
-//                                             format: "%Y-%m-%d",
-//                                         },
-//                                     },
-//                                     "T",
-//                                     "$endTime",
-//                                     ":00",
-//                                 ],
-//                             },
-//                             timezone: "Asia/Kolkata",
-//                         },
-//                     },
-//                 },
-//             },
-//             {
-//                 $addFields: {
-//                     status: {
-//                         $cond: {
-//                             if: {
-//                                 $and: [
-//                                     {
-//                                         $gt: ["$combinedEndDateTime", new Date()],
-//                                     },
-//                                     {
-//                                         $lt: ["$combinedStartDateTime", new Date()],
-//                                     },
-//                                 ],
-//                             },
-//                             then: "ACTIVE",
-//                             else: "INACTIVE",
-//                         },
-//                     },
-//                 },
-//             },
+        let pipeline = [
+            {
+                $addFields: {
+                    combinedStartDateTime: {
+                        $dateFromString: {
+                            dateString: {
+                                $concat: [
+                                    {
+                                        $dateToString: {
+                                            date: "$startDate",
+                                            format: "%Y-%m-%d",
+                                        },
+                                    },
+                                    "T",
+                                    "$startTime",
+                                    ":00",
+                                ],
+                            },
+                            timezone: "Asia/Kolkata",
+                        },
+                    },
+                    combinedEndDateTime: {
+                        $dateFromString: {
+                            dateString: {
+                                $concat: [
+                                    {
+                                        $dateToString: {
+                                            date: "$endDate",
+                                            format: "%Y-%m-%d",
+                                        },
+                                    },
+                                    "T",
+                                    "$endTime",
+                                    ":00",
+                                ],
+                            },
+                            timezone: "Asia/Kolkata",
+                        },
+                    },
+                },
+            },
+            {
+                $addFields: {
+                    status: {
+                        $cond: {
+                            if: {
+                                $and: [
+                                    {
+                                        $gt: ["$combinedEndDateTime", new Date()],
+                                    },
+                                    {
+                                        $lt: ["$combinedStartDateTime", new Date()],
+                                    },
+                                ],
+                            },
+                            then: "ACTIVE",
+                            else: "INACTIVE",
+                        },
+                    },
+                },
+            },
 
-//             {
-//                 $match: {
-//                     $and: [
-//                         req.query.admin
-//                             ? {}
-//                             : {
-//                                   combinedEndDateTime: {
-//                                       $gt: new Date(),
-//                                   },
-//                               },
-//                         {
-//                             combinedStartDateTime: {
-//                                 $lt: new Date(),
-//                             },
-//                         },
-//                     ],
-//                 },
-//             },
-//         ];
+            {
+                $match: {
+                    $and: [
+                        req.query.admin
+                            ? {}
+                            : {
+                                  combinedEndDateTime: {
+                                      $gt: new Date(),
+                                  },
+                              },
+                        {
+                            combinedStartDateTime: {
+                                $lt: new Date(),
+                            },
+                        },
+                    ],
+                },
+            },
+        ];
 
-//         let getContest = await Contest.aggregate(pipeline);
+        let getContest = await Contest.aggregate(pipeline);
 
-//         for (let Contestobj of getContest) {
-//             if (Contestobj?._id) {
-//                 let prizeContestArry = await Prize.find({ contestId: `${Contestobj._id}` }).exec();
-//                 Contestobj.prizeArr = prizeContestArry;
-//             }
-//         }
-//         res.status(200).json({ message: "getContest", data: getContest, success: true });
-//     } catch (err) {
-//         next(err);
-//     }
-// };
+        for (let Contestobj of getContest) {
+            if (Contestobj?._id) {
+                let prizeContestArry = await Prize.find({ contestId: `${Contestobj._id}` }).exec();
+                Contestobj.prizeArr = prizeContestArry;
+            }
+        }
+        res.status(200).json({ message: "getContest", data: getContest, success: true });
+    } catch (err) {
+        next(err);
+    }
+};
 
 export const updateById = async (req, res, next) => {
     try {
@@ -474,33 +474,73 @@ export const luckyDraw = async (req, res, next) => {
     }
 };
 
+// export const previousContest = async (req, res, next) => {
+//     try {
+//         let currentDate = new Date();
+//         //for perivous Month First date
+//         currentDate.setDate(0);
+//         currentDate.setDate(1);
+//         let previousFirstDate = currentDate;
+//         //for previous month last date
+
+//         currentDate = new Date();
+//         currentDate.setDate(0);
+//         let previousLastDate = currentDate;
+//         console.log(previousFirstDate, previousLastDate);
+//         let ContestObj = await Contest.findOne({ status: "CLOSED", endDate: { $gte: previousFirstDate, $lte: previousLastDate } })
+//             .sort({ endDate: -1 })
+//             .lean()
+//             .exec();
+//         if (ContestObj) {
+//             let contestUsers = await userContest.find({ contestId: ContestObj._id, status: "win" }).lean().exec();
+//             let contestPrizes = await Prize.find({ contestId: ContestObj._id }).sort({ rank: 1 }).lean().exec();
+//             for (const user of contestPrizes) {
+//                 let contestPrizes = await userContest.findOne({ contestId: user.contestId, rank: user.rank, status: "win" }).lean().exec();
+//                 if (contestPrizes) {
+//                     let userObj = await userModel.findById(contestPrizes.userId).exec();
+//                     user.userObj = userObj;
+//                 }
+//             }
+//             ContestObj.contestPrizes = contestPrizes;
+//         }
+
+//         res.status(200).json({ message: "getContest", data: ContestObj, success: true });
+//     } catch (err) {
+//         next(err);
+//     }
+// };
+
 export const previousContest = async (req, res, next) => {
     try {
         let currentDate = new Date();
-        //for perivous Month First date
-        currentDate.setDate(0);
+        // For the previous month's first date
+        currentDate.setMonth(currentDate.getMonth() - 1);
         currentDate.setDate(1);
-        let previousFirstDate = currentDate;
-        //for previous month last date
+        let previousFirstDate = new Date(currentDate);
 
-        currentDate = new Date();
+        // For the previous month's last date
+        currentDate.setMonth(currentDate.getMonth() + 1);
         currentDate.setDate(0);
-        let previousLastDate = currentDate;
-        console.log(previousFirstDate, previousLastDate);
+        let previousLastDate = new Date(currentDate);
+
         let ContestObj = await Contest.findOne({ status: "CLOSED", endDate: { $gte: previousFirstDate, $lte: previousLastDate } })
             .sort({ endDate: -1 })
             .lean()
             .exec();
+        console.log(ContestObj);
         if (ContestObj) {
             let contestUsers = await userContest.find({ contestId: ContestObj._id, status: "win" }).lean().exec();
             let contestPrizes = await Prize.find({ contestId: ContestObj._id }).sort({ rank: 1 }).lean().exec();
+
             for (const user of contestPrizes) {
-                let contestPrizes = await userContest.findOne({ contestId: user.contestId, rank: user.rank, status: "win" }).lean().exec();
-                if (contestPrizes) {
-                    let userObj = await userModel.findById(contestPrizes.userId).exec();
+                let contestPrize = await userContest.findOne({ contestId: user.contestId, rank: user.rank, status: "win" }).lean().exec();
+
+                if (contestPrize) {
+                    let userObj = await userModel.findById(contestPrize.userId).exec();
                     user.userObj = userObj;
                 }
             }
+
             ContestObj.contestPrizes = contestPrizes;
         }
 

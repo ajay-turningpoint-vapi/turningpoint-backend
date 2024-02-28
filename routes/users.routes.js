@@ -14,6 +14,7 @@ import {
     getUserStatsReport,
     getContractors,
     googleLogin,
+    updateUserKycStatus,
 } from "../controllers/users.controller";
 import { authorizeJwt } from "../middlewares/auth.middleware";
 
@@ -24,6 +25,7 @@ router.post("/register", registerUser);
 router.post("/login", login);
 
 router.patch("/updateUserStatus/:id", updateUserStatus);
+router.patch("/updateUserKycStatus/:id", updateUserKycStatus);
 router.patch("/update-profile", authorizeJwt, updateUserProfile);
 router.patch("/update-profile-image", authorizeJwt, updateUserProfileImage);
 

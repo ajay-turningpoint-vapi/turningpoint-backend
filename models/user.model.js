@@ -11,6 +11,7 @@ let User = mongoose.Schema(
         contractor: {
             name: String,
             businessName: String,
+            phone: String,
         },
         addressLine: String,
         country: String,
@@ -38,7 +39,6 @@ let User = mongoose.Schema(
                 ifsc: String,
                 bank: String,
                 isActive: { type: Boolean, default: true },
-               
             },
         ],
         upiId: String,

@@ -25,6 +25,7 @@ import reelsRouter from "./routes/reels.routes";
 import emailRouter from "./routes/email.routes";
 import geofenceRouter from "./routes/geofence.routes";
 import reelsLikesRouter from "./routes/ReelLikes.routes";
+import newContractorRouter from "./routes/newContractor.routes";
 import activityLogsRouter from "./routes/activityLogs.routes";
 import { format } from "date-fns";
 const schedule = require("node-schedule");
@@ -72,7 +73,7 @@ app.use("/mail", mailRouter);
 app.use("/email", emailRouter);
 app.use("/map", geofenceRouter);
 app.use("/logs", activityLogsRouter);
-
+app.use("/newContractor", newContractorRouter);
 const job = schedule.scheduleJob("*/1 * * * *", function () {
     let date = format(new Date(), "yyyy-MM-dd");
     let time = format(new Date(), "HH-mm");

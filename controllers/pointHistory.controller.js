@@ -199,33 +199,18 @@ export const pointsRedeem = async (req, res, next) => {
         if (!req.body.transferDetails) {
             throw new Error("Tranfer Details are required");
         }
-        let UserObj = await Users.findById(req.user.userId).lean().exec();
-        if (!UserObj) {
-            throw new Error("User Not Found");
-        }
-
-        let bankDetails = {};
-        if (userObj.bankDetails) {
-            bankDetails = {
-                banktype: userObj.bankDetails.banktype,
-                accountName: userObj.bankDetails.accountName,
-                accountNo: userObj.bankDetails.accountNo,
-                ifsc: userObj.bankDetails.ifsc,
-            };
-        }
 
         let additionalInfo = {
             transferType: req.body.type,
             transferDetails: {
                 ...req.body.transferDetails,
-                ...bankDetails,
             },
         };
 
         let pointDescription = points + " Points are redeem from " + req.body.type + " Transfer";
         let mobileDescription = req.body.type;
         let userPoints = {
-            points: UserObj.points - parseInt(points),
+            points: userObj.points - parseInt(points),
         };
 
         await Users.findByIdAndUpdate(req.user.userId, userPoints).exec();

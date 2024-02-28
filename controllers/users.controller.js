@@ -73,7 +73,6 @@ export const registerUser = async (req, res, next) => {
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         const { uid, name, email, picture } = decodedToken;
 
-        // Create a new user object with the decoded data
         let newUser = await new Users({
             ...req.body,
             uid,
@@ -212,12 +211,30 @@ export const updateUserStatus = async (req, res, next) => {
         }
         await Users.findByIdAndUpdate(req.params.id, { isActive: req.body.status }).exec();
 
-        res.status(201).json({ message: "User Active Status Updated Successfully", success: true });
+        res.status(201).json({ message: "User KYC Status Updated Successfully", success: true });
     } catch (err) {
         next(err);
     }
 };
 
+export const updateUserKycStatus = async (req, res, next) => {
+    try {
+        const userId = req.params.id;
+        const { kycStatus } = req.body;
+        if (typeof kycStatus !== "boolean") {
+            return res.status(400).json({ message: "Invalid status value. Status must be a boolean.", success: false });
+        }
+        const userObj = await Users.findById(userId).exec();
+        if (!userObj) {
+            return res.status(404).json({ message: "User not found", success: false });
+        }
+        await Users.findByIdAndUpdate(userId, { kycStatus: kycStatus }).exec();
+        res.status(201).json({ message: "User Active Status Updated Successfully", success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Internal Server Error", success: false });
+    }
+};
 export const getUsers = async (req, res, next) => {
     try {
         console.log(req.query);
