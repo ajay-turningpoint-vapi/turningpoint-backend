@@ -46,7 +46,6 @@ mongoose.connect(CONFIG.MONGOURI, { useNewUrlParser: true, useUnifiedTopology: t
     }
 });
 app.use(logger("dev"));
-
 app.use(express.json({ limit: "100mb" })); // parses the incoming json requests
 app.use(express.urlencoded({ extended: false, limit: "100mb", parameterLimit: 10000000 }));
 app.use(cookieParser());

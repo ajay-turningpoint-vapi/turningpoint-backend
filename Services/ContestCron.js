@@ -11,7 +11,6 @@ export const checkContest = async (date, time) => {
         let dateToBeComparedEnd = new Date(date)
         dateToBeComparedEnd.setHours(23, 59, 59)
         let allContests = await Contest.find({ endTime: `${time}`.replace("-",":"), endDate: { $gte: dateToBeComparedStart.getTime(), $lte: dateToBeComparedEnd.getTime() } }).exec()
-        console.log(allContests,"litst of contest")
         for (const el of allContests) {
             try {
                 let contestPrizes = await Prize.find({ contestId: el._id }).sort({ rank: 1 }).lean().exec();
