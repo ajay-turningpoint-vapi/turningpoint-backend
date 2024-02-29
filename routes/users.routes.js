@@ -15,6 +15,7 @@ import {
     getContractors,
     googleLogin,
     updateUserKycStatus,
+    checkPhoneNumber,
 } from "../controllers/users.controller";
 import { authorizeJwt } from "../middlewares/auth.middleware";
 
@@ -23,7 +24,7 @@ let router = express.Router();
 router.post("/google-signIn", googleLogin);
 router.post("/register", registerUser);
 router.post("/login", login);
-
+router.post("/checkPhoneNumber", checkPhoneNumber);
 router.patch("/updateUserStatus/:id", updateUserStatus);
 router.patch("/updateUserKycStatus/:id", updateUserKycStatus);
 router.patch("/update-profile", authorizeJwt, updateUserProfile);

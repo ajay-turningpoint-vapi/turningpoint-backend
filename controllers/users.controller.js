@@ -64,11 +64,9 @@ export const registerUser = async (req, res, next) => {
         if (userExistCheck) {
             throw new Error(`${ErrorMessages.EMAIL_EXISTS} or ${ErrorMessages.PHONE_EXISTS}`);
         }
-
         if (!validNo.test(req.body.phone)) {
             throw { status: false, message: `Please fill a valid phone number` };
         }
-
         const { idToken } = req.body;
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         const { uid, name, email, picture } = decodedToken;
@@ -93,6 +91,27 @@ export const registerUser = async (req, res, next) => {
         next(error);
     }
 };
+
+export const checkPhoneNumber=async (req, res, next) => {
+    try {
+        const { phone } = req.body;
+
+        // Check if the phone number exists
+        const user = await Users.findOne({ phone });
+        const phoneNumberExists = !!user;
+
+        if (phoneNumberExists) {
+            res.status(200).json({ exists: true, message: "Phone number is already registered." });
+        } else {
+            res.status(200).json({ exists: false, message: "Phone number is not registered. You can proceed with registration." });
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal Server Error", message: "An unexpected error occurred while checking the phone number." });
+        next(error);
+    }
+}
+
 
 // export const registerUser = async (req, res, next) => {
 //     try {
