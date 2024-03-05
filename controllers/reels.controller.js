@@ -5,9 +5,30 @@ import ActivityLog from "../models/activityLogs.model";
 import mongoose from "mongoose";
 export const addReels = async (req, res, next) => {
     try {
-        // if (!req.body.fileUrl) throw new Error("fileUrl is mandatory");
-        // if (!isValid(req.body.fileUrl)) throw new Error('fileUrl cant be empty');
+        const uploadedFiles = req.files || [];
+
+        // Assuming 'images' is the field name used in upload.array('images', 5)
+        const fileUrls = uploadedFiles.map((file) => file.location);
+
+        // Map file URLs to the corresponding elements in req.body
+        req.body.forEach((el, index) => {
+            if (fileUrls[index]) {
+                el.fileUrl = fileUrls[index];
+            }
+        });
+
+        await Reels.insertMany(req.body);
+
+        res.status(200).json({ message: "Reel Successfully Created", success: true });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const addReels1 = async (req, res, next) => {
+    try {
         for (const el of req.body) {
+            console.log(el);
             if (el.base64) {
                 el.fileUrl = await storeFileAndReturnNameBase64(el.base64);
             }
@@ -39,13 +60,12 @@ export const getReelsPaginated = async (req, res, next) => {
         }
 
         let totalCount = await Reels.countDocuments();
-
         if (totalCount === 0) {
             return res.status(404).json({ message: "No reels found", success: false });
         }
 
         // Retrieve a random set of reels
-        let reelsArr = await Reels.aggregate([{ $sample: { size: 10 } }]); // Adjust the size as needed
+        let reelsArr = await Reels.aggregate([{ $sample: { size: totalCount } }]); // Adjust the size as needed
 
         // Fetch liked status for each reel and create a new array with modified structure
         const reelsWithLikedStatus = await Promise.all(

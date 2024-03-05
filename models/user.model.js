@@ -48,6 +48,7 @@ let User = mongoose.Schema(
         },
         visitingCard: { type: String },
         shopImageArr: [{ shopImage: { type: String } }],
+        fcmToken: { type: String, required: true },
     },
 
     { timestamps: true }

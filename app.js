@@ -34,7 +34,7 @@ const schedule = require("node-schedule");
 import usersRouter from "./routes/users.routes";
 import wishlist from "./routes/wishlist.routes";
 import { checkContest } from "./Services/ContestCron";
-
+import fileRouter from "./routes/fileRouter.routes";
 const app = express();
 
 app.use(cors());
@@ -73,6 +73,7 @@ app.use("/email", emailRouter);
 app.use("/map", geofenceRouter);
 app.use("/logs", activityLogsRouter);
 app.use("/newContractor", newContractorRouter);
+app.use("/", fileRouter);
 const job = schedule.scheduleJob("*/1 * * * *", function () {
     let date = format(new Date(), "yyyy-MM-dd");
     let time = format(new Date(), "HH-mm");
