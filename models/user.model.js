@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { rolesObj } from "../helpers/Constants";
-
+import { customAlphabet } from "nanoid";
+const nanoid = customAlphabet("1234567890", 10);
 let User = mongoose.Schema(
     {
         uid: { type: String, unique: true, required: true },
@@ -49,9 +50,16 @@ let User = mongoose.Schema(
         visitingCard: { type: String },
         shopImageArr: [{ shopImage: { type: String } }],
         fcmToken: { type: String, required: true },
+        refCode: { type: String, unique: true },
+        tokens: [{ type: String }],
     },
 
     { timestamps: true }
 );
+
+User.pre("save", function (next) {
+    this.refCode = "TP" + nanoid();
+    next();
+});
 
 export default mongoose.model("User", User);

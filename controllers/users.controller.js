@@ -22,22 +22,11 @@ export const googleLogin = async (req, res) => {
 
         // Find the user by email
         const existingUser = await Users.findOne({ uid });
+        if (existingUser.tokens.length > 0) {
+            existingUser.tokens = [];
+        }
 
         if (existingUser) {
-            // If the user already exists, update the fields
-            // await Users.findOneAndUpdate(
-            //     { uid },
-            //     {
-            //         $set: {
-            //             uid,
-            //             name,
-            //             image: picture,
-            //             email,
-            //         },
-            //     },
-            //     { new: true }
-            // );
-
             let accessToken = await generateAccessJwt({
                 userId: existingUser?._id,
                 role: existingUser?.role,
@@ -45,7 +34,8 @@ export const googleLogin = async (req, res) => {
                 phone: existingUser?.phone,
                 email: existingUser?.email,
             });
-
+            Users.tokens.push(accessToken);
+            await Users.save();
             res.status(200).json({ message: "LogIn Successful", status: true, token: accessToken });
         } else {
             res.status(200).json({ message: "User not registered", status: false });
@@ -70,20 +60,30 @@ export const registerUser = async (req, res, next) => {
         const { idToken } = req.body;
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         const { uid, name, email, picture } = decodedToken;
-
-        let newUser = await new Users({
-            ...req.body,
-            uid,
-            name,
-            email,
-            image: picture,
-        }).save();
+        const { refCode } = req.body;
+        if (refCode) {
+            // Find the user with the provided referral code
+            const referrer = await User.findOne({ refCode });
+            if (referrer) {
+                // Add referral logic here - increase points for the referrer, etc.
+                referrer.points += 100; // Adjust the points as needed
+                await referrer.save();
+            }
+        }
 
         let accessToken = await generateAccessJwt({
             userId: newUser?._id,
             phone: newUser?.phone,
             email: newUser?.email,
         });
+        let newUser = await new Users({
+            ...req.body,
+            uid,
+            name,
+            email,
+            image: picture,
+            token: accessToken,
+        }).save();
 
         res.status(200).json({ message: "User Created", data: newUser, token: accessToken, status: true });
     } catch (error) {
@@ -91,8 +91,24 @@ export const registerUser = async (req, res, next) => {
         next(error);
     }
 };
+export const userLogOut = async (req, res) => {
+    const token = req.headers.authorization.split(" ")[1];
+    try {
+        const decodedToken = jwt.verify(token, process.env.JWT_ACCESS_TOKEN_SECRET);
+        const userId = decodedToken.id;
+        const user = await Users.findById(userId);
+        if (user) {
+            user.tokens = user.tokens.filter((t) => t !== token);
+            await user.save();
+        }
+        res.json({ message: "Logout successful" });
+    } catch (error) {
+        console.error("Logout error:", error);
+        res.status(500).json({ message: "Logout failed" });
+    }
+};
 
-export const checkPhoneNumber=async (req, res, next) => {
+export const checkPhoneNumber = async (req, res, next) => {
     try {
         const { phone } = req.body;
 
@@ -110,8 +126,7 @@ export const checkPhoneNumber=async (req, res, next) => {
         res.status(500).json({ error: "Internal Server Error", message: "An unexpected error occurred while checking the phone number." });
         next(error);
     }
-}
-
+};
 
 // export const registerUser = async (req, res, next) => {
 //     try {
@@ -597,5 +612,38 @@ export const getUserStatsReport = async (req, res, next) => {
     } catch (error) {
         console.error(error);
         next(error);
+    }
+};
+
+export const getAllCaprenterByContractorName = async (req, res) => {
+    try {
+        const contractors = await Users.find({
+            "contractor.businessName": req.user.contractor.businessName,
+            "contractor.name": req.user.contractor.name,
+        });
+        if (contractors.length === 0) {
+            return res.status(404).json({ message: "No contractors found " + contractor.businessName });
+        }
+
+        // Process the result to group carpenters under the allCarpenters key
+        const allCarpenters = contractors.map(({ name, points }) => ({ name, points }));
+
+        // Calculate the total points for all carpenters
+        const allCarpentersTotal = allCarpenters.reduce((total, carpenter) => total + carpenter.points, 0);
+
+        // Construct the final result
+        const result = {
+            contractor: {
+                name: contractors[0].contractor.name, // Assuming the name is the same for all contractors
+                businessName: contractors[0].contractor.businessName, // Assuming the businessName is the same for all contractors
+                allCarpenters,
+                allCarpentersTotal,
+            },
+        };
+
+        res.json(result);
+    } catch (error) {
+        console.error("Error fetching contractors:", error);
+        res.status(500).json({ error: "Internal server error" });
     }
 };

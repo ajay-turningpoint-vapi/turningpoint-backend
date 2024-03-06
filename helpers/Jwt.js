@@ -5,7 +5,7 @@ export const generateAccessJwt = async (obj) => {
     return jwt.sign(
         {
             ...obj,
-            exp: Math.floor(Date.now() / 1000) + 604800, //valid for 7 days
+            exp: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60, // valid for 30 days
         },
         CONFIG.JWT_ACCESS_TOKEN_SECRET
     );
@@ -15,7 +15,7 @@ export const generateRefreshJwt = async (obj) => {
     return jwt.sign(
         {
             ...obj,
-            exp: Math.floor(Date.now() / 1000) + 604800, //7 days
+            exp: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
         },
         CONFIG.JWT_ACCESS_TOKEN_SECRET
     );
