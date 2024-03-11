@@ -51,7 +51,6 @@ let User = mongoose.Schema(
         shopImageArr: [{ shopImage: { type: String } }],
         fcmToken: { type: String, required: true },
         refCode: { type: String, unique: true },
-        tokens: [{ type: String }],
     },
 
     { timestamps: true }

@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 let pointHistory = mongoose.Schema(
     {
         transactionId: String,
-        userId: { type: mongoose.Types.ObjectId },
+        userId: String,
         amount: Number,
         description: String,
         mobileDescription: String,

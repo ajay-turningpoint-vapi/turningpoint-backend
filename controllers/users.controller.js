@@ -11,6 +11,8 @@ import Contest from "../models/contest.model";
 import mongoose from "mongoose";
 import pointHistoryModel from "../models/pointHistory.model";
 import admin from "../helpers/firebase";
+import { createPointlogs } from "./pointHistory.controller";
+import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
 
 // import { upload } from "../helpers/fileUpload";
 
@@ -19,13 +21,7 @@ export const googleLogin = async (req, res) => {
         const { idToken } = req.body;
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         const { uid, name, email, picture } = decodedToken;
-
-        // Find the user by email
         const existingUser = await Users.findOne({ uid });
-        if (existingUser.tokens.length > 0) {
-            existingUser.tokens = [];
-        }
-
         if (existingUser) {
             let accessToken = await generateAccessJwt({
                 userId: existingUser?._id,
@@ -34,8 +30,8 @@ export const googleLogin = async (req, res) => {
                 phone: existingUser?.phone,
                 email: existingUser?.email,
             });
-            Users.tokens.push(accessToken);
-            await Users.save();
+
+            await existingUser.save();
             res.status(200).json({ message: "LogIn Successful", status: true, token: accessToken });
         } else {
             res.status(200).json({ message: "User not registered", status: false });
@@ -66,25 +62,24 @@ export const registerUser = async (req, res, next) => {
             const referrer = await User.findOne({ refCode });
             if (referrer) {
                 // Add referral logic here - increase points for the referrer, etc.
-                referrer.points += 100; // Adjust the points as needed
+                referrer.points += 100;
+                await createPointlogs(referrer._id, 100, pointTransactionType.CREDIT, `Accumulate 100 points by inviting others through a referral`, "Referral", "success");
                 await referrer.save();
             }
         }
 
-        let accessToken = await generateAccessJwt({
-            userId: newUser?._id,
-            phone: newUser?.phone,
-            email: newUser?.email,
-        });
         let newUser = await new Users({
             ...req.body,
             uid,
             name,
             email,
             image: picture,
-            token: accessToken,
         }).save();
-
+        let accessToken = await generateAccessJwt({
+            userId: newUser?._id,
+            phone: newUser?.phone,
+            email: newUser?.email,
+        });
         res.status(200).json({ message: "User Created", data: newUser, token: accessToken, status: true });
     } catch (error) {
         console.error(error);
@@ -226,7 +221,6 @@ export const updateUserProfileImage = async (req, res, next) => {
         if (!userObj) {
             throw new Error("User Not found");
         }
-
         if (req.body.image) {
             req.body.image = await storeFileAndReturnNameBase64(req.body.image);
         }
@@ -237,15 +231,25 @@ export const updateUserProfileImage = async (req, res, next) => {
     }
 };
 
+// routes/updateUserStatus.js
 export const updateUserStatus = async (req, res, next) => {
     try {
-        let userObj = await Users.findById(req.params.id).exec();
+        const userId = req.params.id;
+        const { status } = req.body;
+
+        let userObj = await Users.findById(userId).exec();
         if (!userObj) {
             throw new Error("User Not found");
         }
-        await Users.findByIdAndUpdate(req.params.id, { isActive: req.body.status }).exec();
 
-        res.status(201).json({ message: "User KYC Status Updated Successfully", success: true });
+        await Users.findByIdAndUpdate(userId, { isActive: status }).exec();
+        req.body = {
+            title: "User Status Update",
+            body: "Your status has been updated successfully.",
+        };
+        await sendSingleNotificationMiddleware(req, res, next);
+
+        res.status(201).json({ message: "User Active Status Updated Successfully", success: true });
     } catch (err) {
         next(err);
     }
@@ -263,7 +267,12 @@ export const updateUserKycStatus = async (req, res, next) => {
             return res.status(404).json({ message: "User not found", success: false });
         }
         await Users.findByIdAndUpdate(userId, { kycStatus: kycStatus }).exec();
-        res.status(201).json({ message: "User Active Status Updated Successfully", success: true });
+        req.body = {
+            title: "User Status Update",
+            body: "Your status has been updated successfully.",
+        };
+        await sendSingleNotificationMiddleware(req, res, next);
+        res.status(201).json({ message: "User KYC Status Updated Successfully", success: true });
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: "Internal Server Error", success: false });

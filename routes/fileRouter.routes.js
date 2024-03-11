@@ -49,7 +49,7 @@ const provideFileUrls = (req, res) => {
 };
 
 // Route configuration using the router instance
-router.post("/upload", upload.array("images", 5), handleFileUpload, provideFileUrls);
+router.post("/upload", upload.array("images"), handleFileUpload, provideFileUrls);
 
 // Export the router
 module.exports = router;

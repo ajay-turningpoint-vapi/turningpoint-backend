@@ -7,7 +7,7 @@ import userModel from "../models/user.model";
 
 export const createPointlogs = async (userId, amount, type, description, mobileDescription, status = "pending", additionalInfo = {}) => {
     let historyLog = {
-        transactionId: new Date().getTime(),
+        transactionId: new Date().getTime().toString(),
         userId: userId,
         amount: amount,
         type: type,
@@ -17,7 +17,12 @@ export const createPointlogs = async (userId, amount, type, description, mobileD
         additionalInfo: additionalInfo,
     };
 
-    await new pointHistory(historyLog).save();
+    try {
+        const savedLog = await new pointHistory(historyLog).save();
+        console.log("Point history saved successfully:", savedLog);
+    } catch (err) {
+        console.error("Error saving point history:", err.message);
+    }
 };
 
 export const getPointHistory = async (req, res, next) => {
@@ -26,6 +31,7 @@ export const getPointHistory = async (req, res, next) => {
         let page = 0;
         let sort = {};
         let query = {};
+
         if (req.query.limit && req.query.limit > 0) {
             limit = parseInt(req.query.limit);
         }
@@ -45,12 +51,14 @@ export const getPointHistory = async (req, res, next) => {
         if (req.query.userId) {
             query.userId = new mongoose.Types.ObjectId(req.query.userId);
         }
+
         if (req.query.q && req.query.q != "") {
             query.transactionId = { $regex: ".*" + req.query.q + ".*" };
         }
+
         let pointHistoryArr = [];
         console.log(query, "points-history");
-        console.log(query, "query");
+
         let pipeline = [
             {
                 $match: query,
@@ -58,48 +66,6 @@ export const getPointHistory = async (req, res, next) => {
             {
                 $addFields: {
                     origionalId: "$_id",
-                },
-            },
-            {
-                $group: {
-                    _id: {
-                        transactionId: "$transactionId",
-                    },
-                    transactionId: {
-                        $first: "$transactionId",
-                    },
-                    userId: {
-                        $first: "$userId",
-                    },
-                    amount: {
-                        $first: "$amount",
-                    },
-                    description: {
-                        $first: "$description",
-                    },
-                    mobileDescription: {
-                        $first: "$mobileDescription",
-                    },
-                    type: {
-                        $first: "$type",
-                    },
-                    status: {
-                        $first: "$status",
-                    },
-                    createdAt: {
-                        $first: "$createdAt",
-                    },
-                    updatedAt: {
-                        $first: "$updatedAt",
-                    },
-                    origionalId: {
-                        $first: "$origionalId",
-                    },
-                },
-            },
-            {
-                $addFields: {
-                    _id: "$origionalId",
                 },
             },
             {
@@ -115,22 +81,35 @@ export const getPointHistory = async (req, res, next) => {
             },
         ];
 
-        console.log(JSON.stringify(pipeline, null, 2), "pipeline");
-        pointHistoryArr = await pointHistory.aggregate(pipeline);
-        // if (req.query.transactions) {
-        //     console.log('asddfsads----------------------------Tasns');
+        if (req.query.transactions) {
+            // If you want to include additionalInfo, modify the pipeline
+            pipeline.push({
+                $project: {
+                    _id: "$origionalId",
+                    transactionId: "$transactionId",
+                    userId: "$userId",
+                    amount: "$amount",
+                    description: "$description",
+                    mobileDescription: "$mobileDescription",
+                    type: "$type",
+                    status: "$status",
+                    createdAt: "$createdAt",
+                    updatedAt: "$updatedAt",
+                    origionalId: "$origionalId",
+                    additionalInfo: "$additionalInfo",
+                },
+            });
+        }
 
-        //     // query.additionalInfo = { $exists: true, $not: { $size: 0 } };
-        // }
-        // else {
-        //     pointHistoryArr = await pointHistory.find(query, {}, { skip: page * limit, limit: limit }).distinct("transactionId").sort({ createdAt: -1 }).lean().exec();
-        // }
+        console.log(JSON.stringify(pipeline, null, 2), "pipeline");
+
+        pointHistoryArr = await pointHistory.aggregate(pipeline);
 
         for (let pointHistory of pointHistoryArr) {
             let UserObj = await Users.findById(pointHistory.userId).lean().exec();
             pointHistory.user = UserObj;
         }
-        // console.log(pointHistoryArr, "pointHistoryArr")
+
         res.status(200).json({ message: "List of points history", data: pointHistoryArr, limit: limit, page: page + 1, success: true });
     } catch (err) {
         next(err);

@@ -20,7 +20,7 @@ import {
     userLogOut,
 } from "../controllers/users.controller";
 import { authorizeJwt } from "../middlewares/auth.middleware";
-import { sendNotificationMiddleware } from "../middlewares/fcm.middleware";
+import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
 
 let router = express.Router();
 
@@ -29,9 +29,9 @@ router.post("/register", registerUser);
 router.post("/logout", userLogOut);
 router.post("/login", login);
 router.post("/checkPhoneNumber", checkPhoneNumber);
-router.patch("/updateUserStatus/:id", updateUserStatus);
-router.patch("/updateUserKycStatus/:id", updateUserKycStatus);
-router.patch("/update-profile", authorizeJwt, sendNotificationMiddleware, updateUserProfile);
+router.patch("/updateUserStatus/:id", sendSingleNotificationMiddleware, updateUserStatus);
+router.patch("/updateUserKycStatus/:id", sendSingleNotificationMiddleware, updateUserKycStatus);
+router.patch("/update-profile", authorizeJwt, updateUserProfile);
 router.patch("/update-profile-image", authorizeJwt, updateUserProfileImage);
 router.get("/getAllCaprenterByContractorName", authorizeJwt, getAllCaprenterByContractorName);
 router.get("/getUserStatsReport/:id", getUserStatsReport);

@@ -10,9 +10,9 @@ let Contestintial = "TNPC";
 
 export const addContest = async (req, res, next) => {
     try {
-        if (req.body.image) {
-            req.body.image = await storeFileAndReturnNameBase64(req.body.image);
-        }
+        // if (req.body.image) {
+        //     req.body.image = await storeFileAndReturnNameBase64(req.body.image);
+        // }
         let foundUrl = await Contest.findOne({ name: req.body.name }).exec();
         if (foundUrl) throw { status: 400, message: "Contest  already registered" };
         req.body.contestId = Contestintial + Math.floor(Date.now() / 1000) + (Math.random() + 1).toString(36).substring(7);
@@ -32,9 +32,9 @@ export const addContest = async (req, res, next) => {
 
                 console.log(prizeObj, "przei obj ");
 
-                if (prize.image) {
-                    prizeObj.image = await storeFileAndReturnNameBase64(prize.image);
-                }
+                // if (prize.image) {
+                //     prizeObj.image = await storeFileAndReturnNameBase64(prize.image);
+                // }
                 let prizsObje = await Prize(prizeObj).save();
                 rank++;
             }

@@ -25,11 +25,12 @@ const generateCouponCode = async () => {
     return couponCode;
 };
 
-const QrGenerator = async (obj) => {
+const QrGenerator = async (couponId) => {
+    const couponIdString = couponId.toString();
     let fileName = `/${new Date().getTime()}.png`;
     let locationVal = location + fileName;
 
-    let qr = await QRCode.toFile(locationVal, obj);
+    let qr = await QRCode.toFile(locationVal, couponIdString);
     return { locationVal, fileName };
 };
 

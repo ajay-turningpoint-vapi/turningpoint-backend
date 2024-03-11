@@ -63,7 +63,7 @@ export const generateCoupon = async (req, res, next) => {
 
         // Insert the generated coupon into the database
         const result = await Coupon.create(couponData);
-
+        await createPointlogs(userObj._id, pointsToGenerate, pointTransactionType.DEBIT, `Generate a coupon worth ${pointsToGenerate} points`, "Coupon", "success");
         res.status(200).json({ message: "Coupon Generated", data: result, success: true });
     } catch (err) {
         console.error(err);
@@ -168,20 +168,15 @@ export const getActiveCouponsQrZip = async (req, res, next) => {
         todayStart.setHours(0, 0, 0);
 
         let CouponArr = await Coupon.find({ maximumNoOfUsersAllowed: 1 }).lean().exec();
-        console.log(CouponArr.length, "CouponArr.length");
+
         let couponsLocationArr = [];
         let couponsNameArr = [];
         for (const el of CouponArr) {
-            let obj = {
-                couponId: el._id,
-            };
-            obj = JSON.stringify(obj);
-            let qr = await QrGenerator(obj);
+            let qr = await QrGenerator(el._id);
             couponsLocationArr.push(qr.locationVal);
             couponsNameArr.push(qr.fileName);
         }
 
-        console.log(couponsLocationArr, "couponsLocationArr");
         let zipFileLocation = await ZipGenerator(couponsLocationArr);
         console.log(zipFileLocation, "zipFileLocation");
 
@@ -242,23 +237,23 @@ export const addMultipleCoupons = async (req, res, next) => {
             finalCouponsArray.push(couponData);
             couponArray.splice(element, 1);
         }
-        console.log(finalCouponsArray, "COUPON_MULTIPLE_ADD_SUCCESS");
-        const totalValueAndCount = finalCouponsArray.reduce(
-            (acc, coupon) => {
-                return {
-                    value: acc.value + parseInt(coupon.value),
-                    count: acc.count + parseInt(coupon.count),
-                };
-            },
-            { value: 0, count: 0 }
-        );
+        // console.log(finalCouponsArray, "COUPON_MULTIPLE_ADD_SUCCESS");
+        // const totalValueAndCount = finalCouponsArray.reduce(
+        //     (acc, coupon) => {
+        //         return {
+        //             value: acc.value + parseInt(coupon.value),
+        //             count: acc.count + parseInt(coupon.count),
+        //         };
+        //     },
+        //     { value: 0, count: 0 }
+        // );
 
-        console.log(req.body.coupons);
+        // console.log(req.body.coupons);
 
-        console.log("forLoopCouponArray", forLoopCouponArray, "length", forLoopCouponArray.length);
-        if (totalValueAndCount.value !== parseInt(req.body.amount) || totalValueAndCount.count !== parseInt(req.body.count)) {
-            throw new Error("Total value and count mismatch");
-        }
+        // console.log("forLoopCouponArray", forLoopCouponArray, "length", forLoopCouponArray.length);
+        // if (totalValueAndCount.value !== parseInt(req.body.amount) || totalValueAndCount.count !== parseInt(req.body.count)) {
+        //     throw new Error("Total value and count mismatch");
+        // }
 
         let result = await Coupon.insertMany(finalCouponsArray);
         let tempArr = _.cloneDeep(result);
