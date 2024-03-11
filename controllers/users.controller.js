@@ -194,8 +194,6 @@ export const updateUserProfile = async (req, res, next) => {
             req.body.idBackImage = await storeFileAndReturnNameBase64(req.body.idBackImage);
         }
 
-        console.log("after", req.body);
-
         if (req.body.bankDetails) {
             let bandDetails = [
                 {

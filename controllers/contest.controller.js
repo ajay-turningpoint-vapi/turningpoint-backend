@@ -28,6 +28,7 @@ export const addContest = async (req, res, next) => {
                     contestId: ContestObj._id,
                     name: prize.name,
                     description: prize.description,
+                    image: prize.image,
                 };
 
                 console.log(prizeObj, "przei obj ");

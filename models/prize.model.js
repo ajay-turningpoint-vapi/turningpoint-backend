@@ -3,9 +3,9 @@ let prize = mongoose.Schema(
     {
         name: { type: String },
         description: String,
-        image:String,
-        contestId:String,
-        rank:Number,
+        image: { type: String, required: true },
+        contestId: String,
+        rank: Number,
     },
     { timestamps: true }
 );
