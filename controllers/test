@@ -1,0 +1,25 @@
+export const gpsData = async (req, res) => {
+    try {
+        const { latitude, longitude } = req.body;
+        console.log("location", latitude, longitude);
+
+        const geofences = await Geofence.find();
+        if (geofences.length === 0) {
+            return res.status(404).json({ message: "No geofences found", success: false });
+        }
+        const foundGeofences = [];
+        geofences.forEach((geofence) => {
+            const distance = calculateDistance(latitude, longitude, geofence.location.coordinates[1], geofence.location.coordinates[0]);
+            if (distance <= geofence.radius) {
+                // User is inside the geofence, handle event accordingly
+                handleGeofenceEvent(geofence);
+                foundGeofences.push(geofence);
+            }
+        });
+
+        res.status(200).json({ message: "Location monitored successfully", usersFound: foundGeofences });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

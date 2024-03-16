@@ -70,3 +70,20 @@ export const sendNotificationMiddleware = async (req, res, next) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+export const sendNotification = async (fcmToken, message) => {
+    try {
+        const payload = {
+            notification: {
+                title: "Geofence Alert",
+                body: message,
+            },
+        };
+        const response = await admin.messaging().send(fcmToken, payload);
+        console.log("Notification sent successfully:", response);
+        return response;
+    } catch (error) {
+        console.error("Error sending notification:", error);
+        throw new Error("Error sending notification");
+    }
+};

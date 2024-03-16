@@ -18,6 +18,11 @@ import {
     checkPhoneNumber,
     getAllCaprenterByContractorName,
     userLogOut,
+    gpsData,
+    addGeoFence,
+    getAllGeofence,
+    deletedGeofence,
+    location,
 } from "../controllers/users.controller";
 import { authorizeJwt } from "../middlewares/auth.middleware";
 import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
@@ -40,7 +45,11 @@ router.get("/getContractors", getContractors);
 router.get("/getUserById/:id", authorizeJwt, getUserById);
 router.get("/getUserContests", getUserContests);
 router.delete("/deleteById/:id", deleteUser);
-
+router.post("/monitor-location", gpsData);
+// router.post("/monitor-location", location);
+router.post("/addGeofence", addGeoFence);
+router.delete("/deletedGeofence/:id", deletedGeofence);
+router.get("/getAllGeofence", getAllGeofence);
 //admin =
 router.post("/registerAdmin", registerAdmin);
 router.post("/loginAdmin", loginAdmin);

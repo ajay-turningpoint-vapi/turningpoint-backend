@@ -6,8 +6,8 @@ export const ValidateEmail = (mail) => {
     }
 };
 export const isValid = (value) => {
-    if (typeof value === 'undefined' || value === null) return false;
-    if (typeof value === 'string' && value.trim().length === 0) return false;
+    if (typeof value === "undefined" || value === null) return false;
+    if (typeof value === "string" && value.trim().length === 0) return false;
     return true;
 };
-export const validNo = /^\(?([1-9]{3})\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})$/;
+export const validNo = /^[6789]\d{9}$/;

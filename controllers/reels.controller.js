@@ -3,6 +3,8 @@ import Reels from "../models/reels.model";
 import ReelLikes from "../models/reelLikes.model";
 import ActivityLog from "../models/activityLogs.model";
 import mongoose from "mongoose";
+const NodeCache = require("node-cache");
+const cache = new NodeCache({ stdTTL: 3600 });
 export const addReels = async (req, res, next) => {
     try {
         const uploadedFiles = req.files || [];
@@ -53,7 +55,56 @@ export const getReels = async (req, res, next) => {
     }
 };
 
+const getReelsFromCacheOrDatabase = async (req) => {
+    // Add req as a parameter
+    const cachedReels = cache.get("reels");
+    if (cachedReels) {
+        console.log("Data found in cache!");
+        return cachedReels;
+    } else {
+        console.log("Data not found in cache. Fetching from database...");
+        try {
+            const totalCount = await Reels.countDocuments();
+            if (totalCount === 0) {
+                return [];
+            }
+            const reelsArr = await Reels.aggregate([{ $sample: { size: totalCount } }]);
+            const reelsWithLikedStatus = await Promise.all(
+                reelsArr.map(async (reel) => {
+                    const likedStatus = await ReelLikes.findOne({
+                        userId: req.user.userId,
+                        reelId: reel._id,
+                    });
+                    return {
+                        ...reel,
+                        likedByCurrentUser: likedStatus !== null,
+                    };
+                })
+            );
+            // Cache the fetched data for future use
+            cache.set("reels", reelsWithLikedStatus);
+            return reelsWithLikedStatus;
+        } catch (error) {
+            console.error("Error fetching data from database:", error);
+            throw error;
+        }
+    }
+};
+
 export const getReelsPaginated = async (req, res, next) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        const reels = await getReelsFromCacheOrDatabase(req); // Pass req here
+        res.status(200).json({ message: "Reels Found", data: reels, success: true });
+    } catch (err) {
+        console.error(err);
+        next(err);
+    }
+};
+
+export const getReelsPaginated1 = async (req, res, next) => {
     try {
         if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });

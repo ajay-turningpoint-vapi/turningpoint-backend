@@ -12,9 +12,8 @@ import mongoose from "mongoose";
 import pointHistoryModel from "../models/pointHistory.model";
 import admin from "../helpers/firebase";
 import { createPointlogs } from "./pointHistory.controller";
-import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
-
-// import { upload } from "../helpers/fileUpload";
+import { sendNotification, sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
+import Geofence from "../models/geoFence.modal";
 
 export const googleLogin = async (req, res) => {
     try {
@@ -67,7 +66,7 @@ export const registerUser = async (req, res, next) => {
                 await referrer.save();
             }
         }
-
+        console.log("req", req.body);
         let newUser = await new Users({
             ...req.body,
             uid,
@@ -171,6 +170,164 @@ export const login = async (req, res, next) => {
     } catch (err) {
         console.log(err);
         next(err);
+    }
+};
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3; // Radius of the Earth in meters
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    const distance = R * c;
+    return distance;
+}
+
+async function handleGeofenceEvent(geofence, req, res, next) {
+    console.log(`User entered geofence: ${geofence.name}`);
+    // req.body = {
+    //     title: "Exclusive Offer Alert: 30% Off at Turning Point!",
+    //     body: "Get ready for excitement! Enjoy 30% off at Turning Point – your gateway to adventure!",
+    // };
+    // await sendSingleNotificationMiddleware(req, res, next);
+}
+
+export const gpsData = async (req, res, next) => {
+    try {
+        const { latitude, longitude } = req.body;
+        console.log("location", latitude, longitude);
+
+        const geofences = await Geofence.find();
+        if (geofences.length === 0) {
+            return res.status(404).json({ message: "No geofences found", success: false });
+        }
+        const foundGeofences = [];
+        geofences.forEach((geofence) => {
+            const distance = calculateDistance(latitude, longitude, geofence.location.coordinates[1], geofence.location.coordinates[0]);
+            if (distance <= geofence.radius) {
+                // User is inside the geofence, handle event accordingly
+                handleGeofenceEvent(geofence, req, res, next);
+                foundGeofences.push(geofence);
+            }
+        });
+        if (foundGeofences.length === 0) {
+            return res.status(200).json({ message: "No users found within any geofences" });
+        }
+        res.status(200).json({ message: "Location monitored successfully", usersFoundInZoneName: foundGeofences });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const location = async (req, res) => {
+
+
+    const { userId, coordinates } = req.body;
+    try {
+        const user = await Users.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        if (user.version !== version) {
+            return res.status(409).json({ message: "Conflict: User data has been modified by another operation" });
+        }
+        const updatedUser = await Users.findByIdAndUpdate(
+            userId,
+            {
+                $set: {
+                    location: { type: "Point", coordinates: coordinates },
+                    $inc: {
+                        version: 1,
+                    },
+                },
+            },
+            { new: true }
+        );
+
+        const enteredGeofences = await Geofence.find({
+            location: {
+                $geoIntersects: {
+                    $geometry: { type: "Point", coordinates: coordinates },
+                },
+            },
+        });
+        for (const geofence of enteredGeofences) {
+            const usersToNotify = await Users.find({
+                location: {
+                    $geoWithin: {
+                        $geometry: geofence.location,
+                    },
+                },
+            });
+            for (const user of usersToNotify) {
+                await sendNotification(user.fcmToken, geofence.notificationMessage);
+            }
+        }
+        res.status(200).json({ message: "Location updated and notifications sent" });
+    } catch (error) {
+        console.error("Error handling location update:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const addGeoFence = async (req, res) => {
+    try {
+        // Extract data from the request body
+        const { name, latitude, longitude, radius, notificationMessage } = req.body;
+
+        // Create a new geofence object
+        const newGeofence = new Geofence({
+            name: name,
+            location: {
+                type: "Point",
+                coordinates: [longitude, latitude],
+            },
+            radius: radius,
+            notificationMessage: notificationMessage,
+        });
+
+        // Save the new geofence to the database
+        const savedGeofence = await newGeofence.save();
+        // Respond with the saved geofence object
+        res.status(201).json({ message: "Added New GeoFence", data: savedGeofence, success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// Assuming you have imported the Geofence model at the top of your file
+
+// Define a route to handle DELETE requests to delete a geofence by its ID
+export const deletedGeofence = async (req, res) => {
+    try {
+        const geofenceId = req.params.id;
+        const deletedGeofence = await Geofence.findByIdAndDelete(geofenceId);
+        if (!deletedGeofence) {
+            return res.status(404).json({ error: "Geofence not found" });
+        }
+        res.json({ message: "Geofence deleted successfully", data: deletedGeofence });
+    } catch (err) {
+        console.error("Error deleting geofence:", err);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getAllGeofence = async (req, res) => {
+    try {
+        const geofences = await Geofence.find();
+        if (geofences.length === 0) {
+            return res.status(404).json({ message: "No geofences found" });
+        }
+        res.status(201).json({ message: "All GeoFence Found", data: geofences, success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Internal server error" });
     }
 };
 

@@ -34,7 +34,9 @@ const schedule = require("node-schedule");
 import usersRouter from "./routes/users.routes";
 import wishlist from "./routes/wishlist.routes";
 import { checkContest } from "./Services/ContestCron";
+
 import fileRouter from "./routes/fileRouter.routes";
+
 const app = express();
 
 app.use(cors());
@@ -80,7 +82,6 @@ const job = schedule.scheduleJob("*/1 * * * *", function () {
     console.log("RUNNING", date, time);
     checkContest(date, time);
 });
-
 app.use(errorHandler);
 
 export default app;
