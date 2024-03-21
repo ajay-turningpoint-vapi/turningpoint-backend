@@ -72,6 +72,7 @@ export const sendNotificationMiddleware = async (req, res, next) => {
 };
 
 export const sendNotification = async (fcmToken, message) => {
+    console.log(fcmToken, message);
     try {
         const payload = {
             notification: {
@@ -79,7 +80,10 @@ export const sendNotification = async (fcmToken, message) => {
                 body: message,
             },
         };
-        const response = await admin.messaging().send(fcmToken, payload);
+        const response = await admin.messaging().send({
+            token: fcmToken,
+            notification: payload.notification, // Use notification field directly
+        });
         console.log("Notification sent successfully:", response);
         return response;
     } catch (error) {
@@ -87,3 +91,5 @@ export const sendNotification = async (fcmToken, message) => {
         throw new Error("Error sending notification");
     }
 };
+
+

@@ -14,14 +14,17 @@ import admin from "../helpers/firebase";
 import { createPointlogs } from "./pointHistory.controller";
 import { sendNotification, sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
 import Geofence from "../models/geoFence.modal";
-
+const geolib = require("geolib");
 export const googleLogin = async (req, res) => {
     try {
-        const { idToken } = req.body;
+        const { idToken,fcmToken } = req.body;
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         const { uid, name, email, picture } = decodedToken;
         const existingUser = await Users.findOne({ uid });
         if (existingUser) {
+
+
+
             let accessToken = await generateAccessJwt({
                 userId: existingUser?._id,
                 role: existingUser?.role,
@@ -173,107 +176,67 @@ export const login = async (req, res, next) => {
     }
 };
 
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371e3; // Radius of the Earth in meters
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    const distance = R * c;
-    return distance;
-}
-
-async function handleGeofenceEvent(geofence, req, res, next) {
-    console.log(`User entered geofence: ${geofence.name}`);
-    // req.body = {
-    //     title: "Exclusive Offer Alert: 30% Off at Turning Point!",
-    //     body: "Get ready for excitement! Enjoy 30% off at Turning Point – your gateway to adventure!",
-    // };
-    // await sendSingleNotificationMiddleware(req, res, next);
-}
-
-export const gpsData = async (req, res, next) => {
-    try {
-        const { latitude, longitude } = req.body;
-        console.log("location", latitude, longitude);
-
-        const geofences = await Geofence.find();
-        if (geofences.length === 0) {
-            return res.status(404).json({ message: "No geofences found", success: false });
-        }
-        const foundGeofences = [];
-        geofences.forEach((geofence) => {
-            const distance = calculateDistance(latitude, longitude, geofence.location.coordinates[1], geofence.location.coordinates[0]);
-            if (distance <= geofence.radius) {
-                // User is inside the geofence, handle event accordingly
-                handleGeofenceEvent(geofence, req, res, next);
-                foundGeofences.push(geofence);
-            }
-        });
-        if (foundGeofences.length === 0) {
-            return res.status(200).json({ message: "No users found within any geofences" });
-        }
-        res.status(200).json({ message: "Location monitored successfully", usersFoundInZoneName: foundGeofences });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Internal server error" });
-    }
+// Function to calculate distance between user's coordinates and geofence coordinates
+const calculateDistance = (userCoordinates, geofenceCoordinates) => {
+    return geolib.getDistance({ latitude: userCoordinates[0], longitude: userCoordinates[1] }, { latitude: geofenceCoordinates[1], longitude: geofenceCoordinates[0] });
 };
 
+// Controller function for updating user's location and sending notifications to users within geofences
 export const location = async (req, res) => {
-
-
-    const { userId, coordinates } = req.body;
+    const { coordinates } = req.body; // Extract coordinates from the request body
     try {
-        const user = await Users.findById(userId);
+        const userId = req.user.userId; // Extract user ID from authenticated user
+        const user = await Users.findById(userId); // Find user by ID in the database
+
+        // Check if user exists
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
-        if (user.version !== version) {
-            return res.status(409).json({ message: "Conflict: User data has been modified by another operation" });
-        }
-        const updatedUser = await Users.findByIdAndUpdate(
-            userId,
-            {
-                $set: {
-                    location: { type: "Point", coordinates: coordinates },
-                    $inc: {
-                        version: 1,
-                    },
-                },
-            },
-            { new: true }
-        );
 
-        const enteredGeofences = await Geofence.find({
-            location: {
-                $geoIntersects: {
-                    $geometry: { type: "Point", coordinates: coordinates },
-                },
-            },
-        });
-        for (const geofence of enteredGeofences) {
-            const usersToNotify = await Users.find({
-                location: {
-                    $geoWithin: {
-                        $geometry: geofence.location,
+        // Find all geofences
+        const allGeofences = await Geofence.find({});
+        for (const geofence of allGeofences) {
+            // Calculate distance between user's coordinates and geofence coordinates
+            const distance = calculateDistance(coordinates, geofence.location.coordinates);
+            // Check if user is within the geofence radius
+            console.log(geofence.location.coordinates);
+            if (distance <= geofence.radius) {
+                const swappedCoordinates = [geofence.location.coordinates[1], geofence.location.coordinates[0]];
+
+                const usersToNotify = await Users.find({
+                    location: {
+                        $geoWithin: {
+                            $centerSphere: [swappedCoordinates, geofence.radius / 6371], // Convert radius to radians
+                        },
                     },
-                },
-            });
-            for (const user of usersToNotify) {
-                await sendNotification(user.fcmToken, geofence.notificationMessage);
+                });
+                // Send notifications to users within the geofence
+
+                for (const user of usersToNotify) {
+                    await sendNotification(user.fcmToken, geofence.notificationMessage);
+                }
+            } else {
+                console.log("Outside geofence radius");
             }
         }
+
         res.status(200).json({ message: "Location updated and notifications sent" });
     } catch (error) {
         console.error("Error handling location update:", error);
         res.status(500).json({ message: "Internal server error" });
     }
 };
+
+// const updatedUser = await Users.findByIdAndUpdate(
+//     userId,
+//     {
+//         $set: {
+//             location: { type: "Point", coordinates: coordinates },
+//             $inc: { version: 1 },
+//         },
+//     },
+//     { new: true }
+// );
 
 export const addGeoFence = async (req, res) => {
     try {
@@ -342,28 +305,40 @@ export const updateUserProfile = async (req, res, next) => {
                 throw new Error(ErrorMessages.INVALID_EMAIL);
             }
         }
-
         if (req.body.idFrontImage) {
-            req.body.idFrontImage = await storeFileAndReturnNameBase64(req.body.idFrontImage);
+
+            if (req.body.idFrontImage.split("/")[0] === "furnipart") {
+
+                if (req.body.idFrontImage) {
+                    req.body.idFrontImage = await storeFileAndReturnNameBase64(req.body.idFrontImage);
+                }
+    
+                if (req.body.idBackImage) {
+                    req.body.idBackImage = await storeFileAndReturnNameBase64(req.body.idBackImage);
+                }
+            } else {
+                req.body.isActive = false;
+            }
+
+        } else {
+            req.body.isActive = false;
         }
 
-        if (req.body.idBackImage) {
-            req.body.idBackImage = await storeFileAndReturnNameBase64(req.body.idBackImage);
-        }
-
-        if (req.body.bankDetails) {
-            let bandDetails = [
+         
+        if (req.body.bankDetails !== null && req.body.bankDetails.length > 0) {
+            let bankDetails = [
                 {
-                    banktype: req.body.bankDetails.type,
-                    accountName: req.body.bankDetails.accountName,
-                    accountNo: req.body.bankDetails.accountNo,
-                    ifsc: req.body.bankDetails.ifsc,
-                    bank: req.body.bankDetails.bank,
-                },
+                    banktype: req.body.bankDetails[0].banktype,
+                    accountName: req.body.bankDetails[0].accountName,
+                    accountNo: req.body.bankDetails[0].accountNo,
+                    ifsc: req.body.bankDetails[0].ifsc,
+                    // bank: req.body.bankDetails[0].bank,
+                },f
             ];
-            req.body.bankDetails = bandDetails;
+            req.body.bankDetails = bankDetails;
             req.body.kycStatus = false;
         }
+        
         userObj = await Users.findByIdAndUpdate(req.user.userId, req.body).exec();
         res.status(200).json({ message: "Profile Updated Successfully", data: userObj, success: true });
     } catch (err) {
@@ -398,11 +373,11 @@ export const updateUserStatus = async (req, res, next) => {
         }
 
         await Users.findByIdAndUpdate(userId, { isActive: status }).exec();
-        req.body = {
-            title: "User Status Update",
-            body: "Your status has been updated successfully.",
-        };
-        await sendSingleNotificationMiddleware(req, res, next);
+        // req.body = {
+        //     title: "User Status Update",
+        //     body: "Your status has been updated successfully.",
+        // };
+        // await sendSingleNotificationMiddleware(req, res, next);
 
         res.status(201).json({ message: "User Active Status Updated Successfully", success: true });
     } catch (err) {
@@ -639,145 +614,240 @@ export const getUserContests = async (req, res, next) => {
 
 export const getUserStatsReport = async (req, res, next) => {
     try {
-        let totalPointsRedeemedPipeline = [
-            {
-                $match: {
-                    userId: new mongoose.Types.ObjectId(req.params.id),
-                },
+        const userId = new mongoose.Types.ObjectId(req.params.id);
+        const regexQuery = {
+            userId,
+            type: "CREDIT",
+            description: {
+                $regex: "liking a reel",
+                $options: "i",
             },
-            {
-                $group: {
-                    _id: null,
-                    total: {
-                        $sum: "$amount",
-                    },
-                },
+        };
+        const regexQuery1 = {
+            userId,
+            type: "DEBIT",
+            $and: [{ status: { $ne: "reject" } }, { status: { $ne: "pending" } }],
+            description: {
+                $regex: "Contest Joined",
+                $options: "i",
             },
-        ];
-        let totalPointsRedeemedForLikingPipeline = [
-            {
-                $match: {
-                    userId: new mongoose.Types.ObjectId(req.params.id),
-                    type: "CREDIT",
-                    description: {
-                        $regex: "liking a reel",
-                        $options: "i",
-                    },
-                },
-            },
-            {
-                $group: {
-                    _id: null,
-                    total: {
-                        $sum: "$amount",
-                    },
-                },
-            },
-        ];
-        let totalPointsRedeemedForProductsPipeline = [
-            {
-                $match: {
-                    userId: new mongoose.Types.ObjectId(req.params.id),
-                    type: "CREDIT",
-                    description: {
-                        $not: {
-                            $regex: "liking a reel",
-                            $options: "i",
-                        },
-                    },
-                },
-            },
-            {
-                $match: {},
-            },
-            {
-                $group: {
-                    _id: null,
-                    total: {
-                        $sum: "$amount",
-                    },
-                },
-            },
-        ];
-        let totalPointsRedeemedInCashPipeline = [
-            {
-                $match: {
-                    userId: new mongoose.Types.ObjectId(req.params.id),
-                    type: "DEBIT",
-                    $and: [{ status: { $ne: "reject" } }, { status: { $ne: "pending" } }],
-                    description: {
-                        $not: {
-                            $regex: "Contest Joined",
-                            $options: "i",
-                        },
-                    },
-                },
-            },
-            {
-                $group: {
-                    _id: null,
-                    total: {
-                        $sum: "$amount",
-                    },
-                },
-            },
-        ];
-        let totalPointsRedeemedInContestPipeline = [
-            {
-                $match: {
-                    userId: new mongoose.Types.ObjectId(req.params.id),
-                    type: "DEBIT",
-                    $and: [{ status: { $ne: "reject" } }, { status: { $ne: "pending" } }],
-                    description: {
-                        $regex: "Contest Joined",
-                        $options: "i",
-                    },
-                },
-            },
-            {
-                $group: {
-                    _id: null,
-                    total: {
-                        $sum: "$amount",
-                    },
-                },
-            },
-        ];
+        };
 
-        console.log(
-            JSON.stringify(totalPointsRedeemedPipeline, null, 2),
-            JSON.stringify(totalPointsRedeemedForLikingPipeline, null, 2),
-            JSON.stringify(totalPointsRedeemedForProductsPipeline, null, 2),
-            JSON.stringify(totalPointsRedeemedInCashPipeline, null, 2),
-            JSON.stringify(totalPointsRedeemedInContestPipeline, null, 2)
-        );
-        let totalPointsRedeemed = await pointHistoryModel.aggregate(totalPointsRedeemedPipeline);
-        let totalPointsRedeemedForLiking = await pointHistoryModel.aggregate(totalPointsRedeemedForLikingPipeline);
-        let totalPointsRedeemedForProducts = await pointHistoryModel.aggregate(totalPointsRedeemedForProductsPipeline);
-        let totalPointsRedeemedInCash = await pointHistoryModel.aggregate(totalPointsRedeemedInCashPipeline);
-        let totalPointsRedeemedInContest = await pointHistoryModel.aggregate(totalPointsRedeemedInContestPipeline);
+        const regexQuery2 = {
+            userId,
+            type: "CREDIT",
+            description: {
+                $not: {
+                    $regex: "liking a reel",
+                    $options: "i",
+                },
+            },
+        };
+
+        const regexQuery3 = {
+            userId,
+            type: "DEBIT",
+            $and: [{ status: { $ne: "reject" } }, { status: { $ne: "pending" } }],
+            description: {
+                $not: {
+                    $regex: "Contest Joined",
+                    $options: "i",
+                },
+            },
+        };
+
+        const regexQuery4 = {
+            userId,
+        };
+
+        const matchingData = await pointHistoryModel.find(regexQuery);
+        console.log("liking", matchingData);
+        let totalAmount = 0;
+        matchingData.forEach((doc) => {
+            totalAmount += doc.amount;
+        });
+
+        const matchingData1 = await pointHistoryModel.find(regexQuery1);
+        let total = 0;
+        matchingData1.forEach((doc) => {
+            total += doc.amount;
+        });
+
+        const matchingData2 = await pointHistoryModel.find(regexQuery2);
+        let total2 = 0;
+        matchingData2.forEach((doc) => {
+            total2 += doc.amount;
+        });
+        const matchingData3 = await pointHistoryModel.find(regexQuery3);
+        let total3 = 0;
+        matchingData3.forEach((doc) => {
+            total3 += doc.amount;
+        });
+
+        const userPointHistory = await pointHistoryModel.find(regexQuery4);
+
+        console.log("userpoint", userPointHistory);
+
         let userObj = await Users.findById(req.params.id).exec();
         if (!userObj) {
             throw new Error("User not found !!!");
         }
-
-        let obj = {
+        res.status(200).json({
             userName: userObj?.name,
             points: userObj?.points,
-            totalPointsRedeemed: totalPointsRedeemed[0]?.total,
-            totalPointsRedeemedForLiking: totalPointsRedeemedForLiking[0]?.total,
-            totalPointsRedeemedForProducts: totalPointsRedeemedForProducts[0]?.total,
-            totalPointsRedeemedInCash: totalPointsRedeemedInCash[0]?.total,
-            totalPointsRedeemedInContest: totalPointsRedeemedInContest[0]?.total,
-        };
-        console.log(obj);
-
-        res.status(200).json({ message: "User Contest", data: obj, success: true });
+            totalPointsRedeemedForLiking: totalAmount,
+            // totalPointsRedeemedInContestPipeline: total,
+            // totalPointsRedeemedForProductsPipeline: total2,
+            // totalPointsRedeemedInCashPipeline: total3,
+            success: true,
+        });
     } catch (error) {
         console.error(error);
-        next(error);
+        res.status(500).json({ message: "Internal Server Error", error: error.message, success: false });
     }
 };
+
+// export const getUserStatsReport = async (req, res, next) => {
+// try {
+//     let totalPointsRedeemedPipeline = [
+//         {
+//             $match: {
+//                 userId: new mongoose.Types.ObjectId(req.params.id),
+//             },
+//         },
+//         {
+//             $group: {
+//                 _id: null,
+//                 total: {
+//                     $sum: { $toDouble: "$amount" },
+//                 },
+//             },
+//         },
+//     ];
+//         let totalPointsRedeemedForLikingPipeline = [
+//             {
+//                 $match: {
+//                     userId: new mongoose.Types.ObjectId(req.params.id),
+//                     type: "CREDIT",
+//                     description: {
+//                         $regex: "liking a reel",
+//                         $options: "i",
+//                     },
+//                 },
+//             },
+//             {
+//                 $group: {
+//                     _id: null,
+//                     total: {
+//                         $sum: { $toDouble: "$amount" },
+//                     },
+//                 },
+//             },
+//         ];
+//         let totalPointsRedeemedForProductsPipeline = [
+//             {
+//                 $match: {
+//                     userId: new mongoose.Types.ObjectId(req.params.id),
+//                     type: "CREDIT",
+//                     description: {
+//                         $not: {
+//                             $regex: "liking a reel",
+//                             $options: "i",
+//                         },
+//                     },
+//                 },
+//             },
+//             {
+//                 $match: {},
+//             },
+//             {
+//                 $group: {
+//                     _id: null,
+//                     total: {
+//                         $sum: { $toDouble: "$amount" },
+//                     },
+//                 },
+//             },
+//         ];
+//         let totalPointsRedeemedInCashPipeline = [
+//             {
+//                 $match: {
+//                     userId: new mongoose.Types.ObjectId(req.params.id),
+//                     type: "DEBIT",
+//                     $and: [{ status: { $ne: "reject" } }, { status: { $ne: "pending" } }],
+//                     description: {
+//                         $not: {
+//                             $regex: "Contest Joined",
+//                             $options: "i",
+//                         },
+//                     },
+//                 },
+//             },
+//             {
+//                 $group: {
+//                     _id: null,
+//                     total: {
+//                         $sum: { $toDouble: "$amount" },
+//                     },
+//                 },
+//             },
+//         ];
+//         let totalPointsRedeemedInContestPipeline = [
+//             {
+//                 $match: {
+//                     userId: new mongoose.Types.ObjectId(req.params.id),
+//                     type: "DEBIT",
+//                     $and: [{ status: { $ne: "reject" } }, { status: { $ne: "pending" } }],
+//                     description: {
+//                         $regex: "Contest Joined",
+//                         $options: "i",
+//                     },
+//                 },
+//             },
+//             {
+//                 $group: {
+//                     _id: null,
+//                     total: {
+//                         $sum: { $toDouble: "$amount" },
+//                     },
+//                 },
+//             },
+//         ];
+
+//         console.log(
+//             JSON.stringify(totalPointsRedeemedPipeline, null, 2),
+//             JSON.stringify(totalPointsRedeemedForLikingPipeline, null, 2),
+//             JSON.stringify(totalPointsRedeemedForProductsPipeline, null, 2),
+//             JSON.stringify(totalPointsRedeemedInCashPipeline, null, 2),
+//             JSON.stringify(totalPointsRedeemedInContestPipeline, null, 2)
+//         );
+//         let totalPointsRedeemed = await pointHistoryModel.aggregate(totalPointsRedeemedPipeline);
+//         let totalPointsRedeemedForLiking = await pointHistoryModel.aggregate(totalPointsRedeemedForLikingPipeline);
+//         let totalPointsRedeemedForProducts = await pointHistoryModel.aggregate(totalPointsRedeemedForProductsPipeline);
+//         let totalPointsRedeemedInCash = await pointHistoryModel.aggregate(totalPointsRedeemedInCashPipeline);
+//         let totalPointsRedeemedInContest = await pointHistoryModel.aggregate(totalPointsRedeemedInContestPipeline);
+//         let userObj = await Users.findById(req.params.id).exec();
+//         if (!userObj) {
+//             throw new Error("User not found !!!");
+//         }
+
+//         let obj = {
+//             userName: userObj?.name,
+//             points: userObj?.points,
+//             totalPointsRedeemed: totalPointsRedeemed[0]?.total,
+//             totalPointsRedeemedForLiking: totalPointsRedeemedForLiking[0]?.total,
+//             totalPointsRedeemedForProducts: totalPointsRedeemedForProducts[0]?.total,
+//             totalPointsRedeemedInCash: totalPointsRedeemedInCash[0]?.total,
+//             totalPointsRedeemedInContest: totalPointsRedeemedInContest[0]?.total,
+//         };
+//         console.log(obj);
+
+//         res.status(200).json({ message: "User Contest", data: obj, success: true });
+//     } catch (error) {
+//         console.error(error);
+//         next(error);
+//     }
+// };
 
 export const getAllCaprenterByContractorName = async (req, res) => {
     try {

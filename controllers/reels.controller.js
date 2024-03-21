@@ -18,7 +18,7 @@ export const addReels = async (req, res, next) => {
                 el.fileUrl = fileUrls[index];
             }
         });
-
+        console.log(req.body);
         await Reels.insertMany(req.body);
 
         res.status(200).json({ message: "Reel Successfully Created", success: true });
@@ -54,13 +54,19 @@ export const getReels = async (req, res, next) => {
         next(err);
     }
 };
-
+const shuffleArray = (array) => {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+};
 const getReelsFromCacheOrDatabase = async (req) => {
     // Add req as a parameter
     const cachedReels = cache.get("reels");
     if (cachedReels) {
         console.log("Data found in cache!");
-        return cachedReels;
+        return shuffleArray([...cachedReels]);
     } else {
         console.log("Data not found in cache. Fetching from database...");
         try {

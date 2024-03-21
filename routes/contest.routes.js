@@ -14,6 +14,7 @@ import {
     getCurrentContest,
     getCurrentContestRewards,
     getPreviousContestRewards,
+    joinContestByCoupon,
 } from "../controllers/contest.controller";
 let router = express.Router();
 import { authorizeJwt } from "../middlewares/auth.middleware";
@@ -25,7 +26,8 @@ router.get("/getContest", authorizeJwt, getContest);
 router.get("/getContestAdmin", authorizeJwt, getContestAdmin);
 router.patch("/updateById/:id", updateById);
 router.delete("/deleteById/:id", deleteById);
-router.get("/joinContest/:id", authorizeJwt, joinContest);
+// router.get("/joinContest/:id", authorizeJwt, joinContest);
+router.get("/joinContest/:id", authorizeJwt, joinContestByCoupon);
 router.get("/myContests", authorizeJwt, myContests);
 router.get("/getCurrentContest", authorizeJwt, getCurrentContest);
 router.post("/luckyDraw/:id", authorizeJwt, luckyDraw);

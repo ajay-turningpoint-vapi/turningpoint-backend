@@ -476,6 +476,49 @@ export const joinContest = async (req, res, next) => {
     }
 };
 
+export const joinContestByCoupon = async (req, res, next) => {
+    try {
+        let ContestObj = await Contest.findById(req.params.id).exec();
+        if (!ContestObj) throw { status: 400, message: "Contest Not Found" };
+
+        let UserObj = await userModel.findById(req.user.userId).lean().exec();
+        if (!UserObj) throw { status: 400, message: "User Not Found" };
+
+        let points = ContestObj.points;
+        if (UserObj.points <= 0 || UserObj.points < points) {
+            throw { status: 400, message: "Insufficient balance" };
+        }
+
+        let userJoin = ContestObj.userJoin;
+
+        // Create entry for user's join
+        let userContestObj = {
+            contestId: ContestObj._id,
+            userId: UserObj._id,
+            userJoinStatus: true, // Set userJoinStatus to true when joining
+        };
+
+        // Save user's join entry
+        await userContest.create(userContestObj);
+
+        // Deduct points from user's balance
+        let updatedUserPoints = UserObj.points - parseInt(points);
+        await userModel.findByIdAndUpdate(req.user.userId, { points: updatedUserPoints });
+
+        // Increment userJoin count in Contest document
+        await Contest.findByIdAndUpdate(req.params.id, { $inc: { userJoin: 1 } });
+
+        // Log point transaction
+        let pointDescription = ContestObj.name + " Contest Joined with " + points + " Points";
+        let mobileDescription = "Contest";
+        await createPointlogs(req.user.userId, points, pointTransactionType.DEBIT, pointDescription, mobileDescription, "success");
+
+        res.status(200).json({ message: "Contest Joined Successfully", success: true });
+    } catch (err) {
+        next(err);
+    }
+};
+
 // export const joinContest = async (req, res, next) => {
 //     try {
 //         let ContestObj = await Contest.findById(req.params.id).exec();

@@ -361,7 +361,7 @@ export const applyCoupon = async (req, res, next) => {
         let points = CouponObj.value;
 
         if (CouponObj.value !== 0) {
-            let pointDescription = "Coupon Earned " + points + " Points";
+            let pointDescription = "Coupon Earned " + points + " Points By Scanning QRCode";
             let mobileDescription = "Coupon";
             await createPointlogs(req.user.userId, points, pointTransactionType.CREDIT, pointDescription, mobileDescription, "success");
             let userPoints = {
