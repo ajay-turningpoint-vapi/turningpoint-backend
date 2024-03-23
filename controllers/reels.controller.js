@@ -97,7 +97,7 @@ const getReelsFromCacheOrDatabase = async (req) => {
     }
 };
 
-export const getReelsPaginated = async (req, res, next) => {
+export const getReelsPaginated1 = async (req, res, next) => {
     try {
         if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });
@@ -114,7 +114,7 @@ export const getReelsPaginated = async (req, res, next) => {
     }
 };
 
-export const getReelsPaginated1 = async (req, res, next) => {
+export const getReelsPaginated = async (req, res, next) => {
     try {   
         if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });
