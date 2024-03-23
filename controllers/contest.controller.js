@@ -66,24 +66,75 @@ export const getContestById = async (req, res, next) => {
 
 export const getCurrentContest = async (req, res, next) => {
     try {
-        // Check if the result is cached
-        const cachedResult = cache.get("currentContest");
-        if (cachedResult) {
-            console.log("Returning cached result for current contest");
-            return res.status(200).json({ message: "getCurrentContest", data: cachedResult, success: true });
-        }
-
         console.log(req.query, "query");
 
         let pipeline = [
-            // Your aggregation pipeline stages
+            {
+                $addFields: {
+                    combinedEndDateTime: {
+                        $dateFromString: {
+                            dateString: {
+                                $concat: [
+                                    {
+                                        $dateToString: {
+                                            date: "$endDate",
+                                            format: "%Y-%m-%d",
+                                        },
+                                    },
+                                    "T",
+                                    "$endTime",
+                                    ":00",
+                                ],
+                            },
+                            timezone: "Asia/Kolkata",
+                        },
+                    },
+                },
+            },
+            {
+                $addFields: {
+                    status: {
+                        $cond: {
+                            if: {
+                                $gt: ["$combinedEndDateTime", new Date()],
+                            },
+                            then: "ACTIVE",
+                            else: "INACTIVE",
+                        },
+                    },
+                },
+            },
+            {
+                $match: {
+                    $and: [
+                        req.query.admin
+                            ? {}
+                            : {
+                                  combinedEndDateTime: {
+                                      $gt: new Date(),
+                                  },
+                              },
+                        {
+                            combinedEndDateTime: {
+                                $gt: new Date(),
+                            },
+                        },
+                    ],
+                },
+            },
+            {
+                $sort: { combinedEndDateTime: 1 }, // Sort by end date and time in ascending order
+            },
+            {
+                $limit: 1, // Limit to the first result (nearest end date and time)
+            },
         ];
 
         let getCurrentContest = await Contest.aggregate(pipeline);
 
         if (getCurrentContest.length > 0) {
             // Fetch prize data for the current contest
-            let prizeContestArray = await Prize.find({ contestId: getCurrentContest[0]._id }).exec();
+            let prizeContestArray = await Prize.find({ contestId: `${getCurrentContest[0]._id}` }).exec();
             getCurrentContest[0].prizeArr = prizeContestArray;
 
             // Check if the user has joined the current contest
@@ -97,15 +148,13 @@ export const getCurrentContest = async (req, res, next) => {
             }
         }
 
-        // Cache the result
-        cache.set("currentContest", getCurrentContest);
-
         // Respond with the modified JSON object containing information about the current contest and associated prize array
         res.status(200).json({ message: "getCurrentContest", data: getCurrentContest, success: true });
     } catch (err) {
         next(err);
     }
 };
+
 
 export const getContest = async (req, res, next) => {
     try {
@@ -843,13 +892,6 @@ export const currentContest = async (req, res, next) => {
 
 export const getCurrentContestRewards = async (req, res, next) => {
     try {
-        // Check if the result is cached
-        const cachedResult = cache.get("currentContestRewards");
-        if (cachedResult) {
-            console.log("Returning cached result for current contest rewards");
-            return res.status(200).json({ message: "Recent closed contest information retrieved from cache", data: cachedResult, success: true });
-        }
-
         // Get the current date and time
         const currentDateTime = new Date();
 
@@ -882,9 +924,6 @@ export const getCurrentContestRewards = async (req, res, next) => {
             contestPrizes: currentContestPrizes,
         };
 
-        // Cache the result
-        cache.set("currentContestRewards", responseData);
-
         // Send the response
         res.status(200).json({ message: "Recent closed contest information retrieved successfully", data: responseData, success: true });
     } catch (err) {
@@ -895,13 +934,6 @@ export const getCurrentContestRewards = async (req, res, next) => {
 
 export const getPreviousContestRewards = async (req, res, next) => {
     try {
-        // Check if the result is cached
-        const cachedResult = cache.get("previousContestRewards");
-        if (cachedResult) {
-            console.log("Returning cached result for previous contest rewards");
-            return res.status(200).json({ message: "Previous closed contest information retrieved from cache", data: cachedResult, success: true });
-        }
-
         // Get the current date and time
         const currentDateTime = new Date();
 
@@ -949,9 +981,6 @@ export const getPreviousContestRewards = async (req, res, next) => {
             contestName: previousContest.name,
             contestPrizes: previousContestPrizes,
         };
-
-        // Cache the result
-        cache.set("previousContestRewards", responseData);
 
         // Send the response
         res.status(200).json({ message: "Previous closed contest information retrieved successfully", data: responseData, success: true });

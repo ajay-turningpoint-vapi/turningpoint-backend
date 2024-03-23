@@ -115,7 +115,7 @@ export const getReelsPaginated = async (req, res, next) => {
 };
 
 export const getReelsPaginated1 = async (req, res, next) => {
-    try {
+    try {   
         if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });
         }
@@ -127,7 +127,7 @@ export const getReelsPaginated1 = async (req, res, next) => {
 
         // Retrieve a random set of reels
         let reelsArr = await Reels.aggregate([{ $sample: { size: totalCount } }]); // Adjust the size as needed
-
+        console.log("reels", reelsArr);
         // Fetch liked status for each reel and create a new array with modified structure
         const reelsWithLikedStatus = await Promise.all(
             reelsArr.map(async (reel) => {

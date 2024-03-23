@@ -339,7 +339,6 @@ export const updateUserProfile = async (req, res, next) => {
                     ifsc: req.body.bankDetails[0].ifsc,
                     // bank: req.body.bankDetails[0].bank,
                 },
-                f,
             ];
             req.body.bankDetails = bankDetails;
             req.body.kycStatus = false;

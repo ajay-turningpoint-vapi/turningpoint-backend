@@ -75,7 +75,6 @@ const handleFileUpload = async (req, res, next) => {
 
 const provideFileUrls = (req, res) => {
     res.setHeader("Cache-Control", "public, max-age=31536000"); // 1 year
-    res.compress();
     res.status(200).json(req.fileUrls);
 };
 router.use(compression());
