@@ -35,7 +35,7 @@ router.post("/logout", userLogOut);
 router.post("/login", login);
 router.post("/checkPhoneNumber", checkPhoneNumber);
 router.patch("/updateUserStatus/:id", updateUserStatus);
-router.patch("/updateUserKycStatus/:id", sendSingleNotificationMiddleware, updateUserKycStatus);
+router.patch("/updateUserKycStatus/:id", updateUserKycStatus);
 router.patch("/update-profile", authorizeJwt, updateUserProfile);
 router.patch("/update-profile-image", authorizeJwt, updateUserProfileImage);
 router.get("/getAllCaprenterByContractorName", authorizeJwt, getAllCaprenterByContractorName);

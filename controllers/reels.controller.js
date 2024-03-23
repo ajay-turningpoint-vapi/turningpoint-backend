@@ -87,7 +87,7 @@ const getReelsFromCacheOrDatabase = async (req) => {
                     };
                 })
             );
-            // Cache the fetched data for future use
+
             cache.set("reels", reelsWithLikedStatus);
             return reelsWithLikedStatus;
         } catch (error) {
@@ -103,6 +103,10 @@ export const getReelsPaginated = async (req, res, next) => {
             return res.status(401).json({ message: "Unauthorized" });
         }
         const reels = await getReelsFromCacheOrDatabase(req); // Pass req here
+        await ActivityLog.create({
+            userId: req.user.userId,
+            type: "Watching Reels",
+        });
         res.status(200).json({ message: "Reels Found", data: reels, success: true });
     } catch (err) {
         console.error(err);

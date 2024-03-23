@@ -1,12 +1,11 @@
 const { Router } = require("express");
 const multer = require("multer");
 const multerS3 = require("multer-s3");
+const { LRUCache } = require("lru-cache");
 const { v4: uuidv4 } = require("uuid");
 const { S3Client } = require("@aws-sdk/client-s3");
-const compression = require("compression");
-const { LRUCache } = require("lru-cache");
 const path = require("path");
-
+const compression = require("compression");
 const router = Router();
 
 const s3Client = new S3Client({
@@ -28,41 +27,58 @@ const upload = multer({
         },
     }),
 });
-const cache = new LRUCache({
-    max: 100, // Maximum number of items to store
-    maxAge: 1000 * 60 * 10, // Maximum age of items in milliseconds (10 minutes)
-});
+const cache = new LRUCache({ max: 1000 });
+
+const cloudFrontDomain = "https://d1m2dthq0rpgme.cloudfront.net";
+
 const handleFileUpload = async (req, res, next) => {
     try {
-        const fileUrls = [];
+        // Retrieve uploaded files and construct CloudFront URLs
+        const fileUrls = req.files.map((file) => `${cloudFrontDomain}/${file.key}`);
 
-        if (req.files && req.files.length > 0) {
-            for (const file of req.files) {
-                fileUrls.push(file.location);
-            }
-        }
+        // Cache the fileUrls for future requests (if needed)
+        cache.set("fileUrls", fileUrls);
+
         req.fileUrls = fileUrls;
-        cache.set(req.originalUrl, fileUrls);
-
         next();
     } catch (error) {
         next(error);
     }
 };
+// const handleFileUpload = async (req, res, next) => {
+//     try {
+//         // Check if URLs are already cached
+//         const cachedUrls = cache.get("fileUrls");
+
+//         if (cachedUrls) {
+//             req.fileUrls = cachedUrls;
+//         } else {
+//             const fileUrls = [];
+
+//             if (req.files && req.files.length > 0) {
+//                 for (const file of req.files) {
+//                     fileUrls.push(file.location);
+//                 }
+//             }
+
+//             req.fileUrls = fileUrls;
+
+//             // Cache the fileUrls for future requests
+//             cache.set("fileUrls", fileUrls);
+//         }
+
+//         next();
+//     } catch (error) {
+//         next(error);
+//     }
+// };
 
 const provideFileUrls = (req, res) => {
-    const cachedUrls = cache.get(req.originalUrl);
-    if (cachedUrls) {
-        // If file URLs are cached, return them directly
-        res.status(200).json(cachedUrls);
-    } else {
-        // If file URLs are not cached, proceed as usual
-        res.status(200).json(req.fileUrls);
-    }
+    res.setHeader("Cache-Control", "public, max-age=31536000"); // 1 year
+    res.compress();
+    res.status(200).json(req.fileUrls);
 };
 router.use(compression());
-// Route configuration using the router instance
-router.post("/upload", upload.array("images"), handleFileUpload, provideFileUrls);
 
-// Export the router
+router.post("/upload", upload.array("images"), handleFileUpload, provideFileUrls);
 module.exports = router;

@@ -25,27 +25,29 @@ export const getUserActivities = async (req, res, next) => {
 
 export const getUserActivitiesById = async (req, res, next) => {
     try {
-        const userId = req.params.userId;
-
-        // Validate the user ID format
-        if (!mongoose.Types.ObjectId.isValid(userId)) {
-            return res.status(400).json({ message: "Invalid user ID format" });
+        
+        let query = {};
+        // Pagination parameters
+     
+        console.log(req.query.userId);
+        if (req.query.userId) {
+            query.userId = new mongoose.Types.ObjectId(req.query.userId);
         }
-
         // Check if the user exists
-        const user = await User.findById(userId);
+        const user = await User.findById(req.query.userId);
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        // Retrieve activity logs by user ID using the ActivityLog model
-        const userActivityLogs = await ActivityLog.find({ userId });
+        // Retrieve activity logs by user ID using the ActivityLog model with pagination
+        const userActivityLogs = await ActivityLog.find(query)
+            .sort({ timestamp: -1 })
 
         // Map activity logs and format timestamps
         const formattedLogs = userActivityLogs.map((log) => {
             return {
-                logId:log._id,
-                name: log.userId.name, // Include other user properties as needed
+                logId: log._id,
+                name: user.name, // Include other user properties as needed
                 type: log.type,
                 timestamp: log.timestamp.toLocaleString(), // Convert timestamp to human-readable format
             };

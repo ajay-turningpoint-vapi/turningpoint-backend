@@ -1,13 +1,5 @@
 import express from "express";
-import {
-    addProduct,
-    deleteProductById,
-    getAllProducts,
-    updateProductById,
-    getActiveProducts,
-    getProductsPubAndTotal,
-    getProductsCategoryWise
-} from "../controllers/product.controller";
+import { addProduct, deleteProductById, getAllProducts, updateProductById, getActiveProducts, getProductsPubAndTotal, getProductsCategoryWise } from "../controllers/product.controller";
 
 let router = express.Router();
 

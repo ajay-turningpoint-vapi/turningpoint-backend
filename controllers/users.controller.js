@@ -17,13 +17,18 @@ import Geofence from "../models/geoFence.modal";
 const geolib = require("geolib");
 export const googleLogin = async (req, res) => {
     try {
-        const { idToken,fcmToken } = req.body;
+        const { idToken, fcmToken } = req.body;
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         const { uid, name, email, picture } = decodedToken;
-        const existingUser = await Users.findOne({ uid });
+
+        // Find user by matching both uid and phone
+        const existingUser = await Users.findOne({ uid: uid });
+
         if (existingUser) {
-
-
+            // Check if the UID matches the user's UID
+            if (existingUser.uid !== uid) {
+                throw { status: 400, message: "GoogleId or phone number do not match" };
+            }
 
             let accessToken = await generateAccessJwt({
                 userId: existingUser?._id,
@@ -32,7 +37,7 @@ export const googleLogin = async (req, res) => {
                 phone: existingUser?.phone,
                 email: existingUser?.email,
             });
-
+            existingUser.fcmToken = fcmToken;
             await existingUser.save();
             res.status(200).json({ message: "LogIn Successful", status: true, token: accessToken });
         } else {
@@ -40,7 +45,11 @@ export const googleLogin = async (req, res) => {
         }
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Internal Server Error", status: false });
+        if (error.status) {
+            res.status(error.status).json({ error: error.message, status: false });
+        } else {
+            res.status(500).json({ error: "Internal Server Error", status: false });
+        }
     }
 };
 
@@ -306,25 +315,21 @@ export const updateUserProfile = async (req, res, next) => {
             }
         }
         if (req.body.idFrontImage) {
-
             if (req.body.idFrontImage.split("/")[0] === "furnipart") {
-
                 if (req.body.idFrontImage) {
                     req.body.idFrontImage = await storeFileAndReturnNameBase64(req.body.idFrontImage);
                 }
-    
+
                 if (req.body.idBackImage) {
                     req.body.idBackImage = await storeFileAndReturnNameBase64(req.body.idBackImage);
                 }
             } else {
                 req.body.isActive = false;
             }
-
         } else {
             req.body.isActive = false;
         }
 
-         
         if (req.body.bankDetails !== null && req.body.bankDetails.length > 0) {
             let bankDetails = [
                 {
@@ -333,12 +338,13 @@ export const updateUserProfile = async (req, res, next) => {
                     accountNo: req.body.bankDetails[0].accountNo,
                     ifsc: req.body.bankDetails[0].ifsc,
                     // bank: req.body.bankDetails[0].bank,
-                },f
+                },
+                f,
             ];
             req.body.bankDetails = bankDetails;
             req.body.kycStatus = false;
         }
-        
+
         userObj = await Users.findByIdAndUpdate(req.user.userId, req.body).exec();
         res.status(200).json({ message: "Profile Updated Successfully", data: userObj, success: true });
     } catch (err) {
@@ -397,11 +403,6 @@ export const updateUserKycStatus = async (req, res, next) => {
             return res.status(404).json({ message: "User not found", success: false });
         }
         await Users.findByIdAndUpdate(userId, { kycStatus: kycStatus }).exec();
-        req.body = {
-            title: "User Status Update",
-            body: "Your status has been updated successfully.",
-        };
-        await sendSingleNotificationMiddleware(req, res, next);
         res.status(201).json({ message: "User KYC Status Updated Successfully", success: true });
     } catch (err) {
         console.error(err);
@@ -614,96 +615,111 @@ export const getUserContests = async (req, res, next) => {
 
 export const getUserStatsReport = async (req, res, next) => {
     try {
-        const userId = new mongoose.Types.ObjectId(req.params.id);
-        const regexQuery = {
-            userId,
-            type: "CREDIT",
-            description: {
-                $regex: "liking a reel",
-                $options: "i",
-            },
-        };
-        const regexQuery1 = {
-            userId,
-            type: "DEBIT",
-            $and: [{ status: { $ne: "reject" } }, { status: { $ne: "pending" } }],
-            description: {
-                $regex: "Contest Joined",
-                $options: "i",
-            },
-        };
-
-        const regexQuery2 = {
-            userId,
-            type: "CREDIT",
-            description: {
-                $not: {
-                    $regex: "liking a reel",
-                    $options: "i",
+        const userId = req.params.id;
+        const allTransactions = [
+            {
+                $match: {
+                    userId: userId,
                 },
             },
-        };
-
-        const regexQuery3 = {
-            userId,
-            type: "DEBIT",
-            $and: [{ status: { $ne: "reject" } }, { status: { $ne: "pending" } }],
-            description: {
-                $not: {
-                    $regex: "Contest Joined",
-                    $options: "i",
+        ];
+        const likingReelpipeline = [
+            {
+                $match: {
+                    userId: userId,
+                    type: "CREDIT",
+                    description: {
+                        $regex: "liking a reel",
+                        $options: "i",
+                    },
                 },
             },
-        };
+            {
+                $group: {
+                    _id: null,
+                    totalAmount: { $sum: "$amount" },
+                },
+            },
+        ];
+        let totalPointsRedeemedInContestPipeline = [
+            {
+                $match: {
+                    userId: userId,
+                    type: "DEBIT",
+                    $and: [{ status: { $ne: "reject" } }, { status: { $ne: "pending" } }],
+                    description: {
+                        $regex: "Contest Joined",
+                        $options: "i",
+                    },
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalAmount: { $sum: "$amount" },
+                },
+            },
+        ];
+        const totalDebitPipeline = [
+            {
+                $match: {
+                    userId: userId,
+                    type: "DEBIT",
+                    $and: [{ status: { $ne: "reject" } }, { status: { $ne: "pending" } }],
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalAmount: { $sum: "$amount" },
+                },
+            },
+        ];
+        const totalPointsCouponPipeline = [
+            {
+                $match: {
+                    userId: userId,
+                    type: "CREDIT",
+                    description: {
+                        $regex: "Coupon Earned",
+                        $options: "i",
+                    },
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalAmount: { $sum: "$amount" },
+                },
+            },
+        ];
 
-        const regexQuery4 = {
-            userId,
-        };
+        const userAllTransactions = await pointHistoryModel.aggregate(allTransactions).exec();
+        const likingReel = await pointHistoryModel.aggregate(likingReelpipeline).exec();
+        const total = await pointHistoryModel.aggregate(totalPointsRedeemedInContestPipeline).exec();
+        const totalCoupoun = await pointHistoryModel.aggregate(totalPointsCouponPipeline).exec();
+        const user = await Users.findById(userId).exec();
 
-        const matchingData = await pointHistoryModel.find(regexQuery);
-        console.log("liking", matchingData);
-        let totalAmount = 0;
-        matchingData.forEach((doc) => {
-            totalAmount += doc.amount;
-        });
-
-        const matchingData1 = await pointHistoryModel.find(regexQuery1);
-        let total = 0;
-        matchingData1.forEach((doc) => {
-            total += doc.amount;
-        });
-
-        const matchingData2 = await pointHistoryModel.find(regexQuery2);
-        let total2 = 0;
-        matchingData2.forEach((doc) => {
-            total2 += doc.amount;
-        });
-        const matchingData3 = await pointHistoryModel.find(regexQuery3);
-        let total3 = 0;
-        matchingData3.forEach((doc) => {
-            total3 += doc.amount;
-        });
-
-        const userPointHistory = await pointHistoryModel.find(regexQuery4);
-
-        console.log("userpoint", userPointHistory);
-
-        let userObj = await Users.findById(req.params.id).exec();
-        if (!userObj) {
+        if (!user) {
             throw new Error("User not found !!!");
         }
-        res.status(200).json({
-            userName: userObj?.name,
-            points: userObj?.points,
-            totalPointsRedeemedForLiking: totalAmount,
-            // totalPointsRedeemedInContestPipeline: total,
-            // totalPointsRedeemedForProductsPipeline: total2,
-            // totalPointsRedeemedInCashPipeline: total3,
-            success: true,
-        });
+        const totalDebit = await pointHistoryModel.aggregate(totalDebitPipeline).exec();
+        const totalPointsRedeemed = user.points - (totalDebit.length > 0 ? totalDebit[0].totalAmount : 0);
+        // Construct the response object
+        const response = {
+            userName: user.name,
+            points: user.points,
+            totalPointsRedeemed: totalDebit.length > 0 ? totalDebit[0].totalAmount : 0,
+            totalPointsRedeemedForProducts: totalCoupoun.length > 0 ? totalCoupoun[0].totalAmount : 0,
+            totalPointsRedeemedForLiking: likingReel.length > 0 ? likingReel[0].totalAmount : 0,
+            totalPointsRedeemedInContest: total.length > 0 ? total[0].totalAmount : 0,
+            userAllTransactions: userAllTransactions,
+        };
+
+        res.status(200).json({ message: "User Contest", data: response, success: true });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: "Internal Server Error", error: error.message, success: false });
+        next(error);
     }
 };
 

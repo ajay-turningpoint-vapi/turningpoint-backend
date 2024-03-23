@@ -11,6 +11,7 @@ let Couponintial = "TNP";
 import _ from "lodash";
 import { customAlphabet } from "nanoid";
 import mongoose from "mongoose";
+import activityLogsModel from "../models/activityLogs.model";
 const nanoid = customAlphabet("1234567890", 10);
 export const addCoupons = async (req, res, next) => {
     try {
@@ -367,7 +368,11 @@ export const applyCoupon = async (req, res, next) => {
             let userPoints = {
                 points: UserObj.points + parseInt(points),
             };
-            console.log(userPoints);
+            await activityLogsModel.create({
+                userId: req.user.userId,
+                type: "Scanned Coupon",
+            });
+
             await Users.findByIdAndUpdate(req.user.userId, userPoints).exec();
 
             res.status(200).json({ message: "Coupon Applied", success: true, points: CouponObj.value });

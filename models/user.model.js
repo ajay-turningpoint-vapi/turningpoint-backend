@@ -34,6 +34,18 @@ let User = mongoose.Schema(
         image: String,
         idFrontImage: String,
         idBackImage: String,
+        contests: [
+            {
+                contestName: {
+                    type: String,
+                    required: true,
+                },
+                userJoinContest: {
+                    type: Number,
+                    default: 0,
+                },
+            },
+        ],
         bankDetails: [
             {
                 banktype: String,

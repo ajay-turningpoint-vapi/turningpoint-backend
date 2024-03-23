@@ -6,6 +6,8 @@ let product = mongoose.Schema(
         // sku: String,
         brand: String,
         company: String,
+        salePrice:Number,
+        commisionAllowed:Number,
         // modelNumber: String,
         // categoryId: { type: mongoose.Types.ObjectId },
         // parentCategoryIdArr: [

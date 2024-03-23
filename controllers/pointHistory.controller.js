@@ -57,7 +57,6 @@ export const getPointHistory = async (req, res, next) => {
         }
 
         let pointHistoryArr = [];
-        console.log(query, "points-history");
 
         let pipeline = [
             {

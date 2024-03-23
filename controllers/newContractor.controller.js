@@ -1,3 +1,4 @@
+import axios from "axios";
 import NewContractor from "../models/newContractor.modal";
 
 export const addNewContractor = async (req, res, next) => {
@@ -11,6 +12,10 @@ export const addNewContractor = async (req, res, next) => {
             return res.status(400).json({ message: "Phone number is already in use" });
         }
         const newContractor = await NewContractor.create({ phone, name });
+        const message = encodeURIComponent(
+            `Hello ${name},\n\nThank you for providing your name. We noticed that you're not registered with Turing Point App yet. Don't miss out on exclusive discounts, special offers, and exciting lucky draws available only for our registered customers!\n\nRegister now on the Turing Point App to enjoy these benefits and more:\n- Exclusive discounts on carpentry services\n- Special offers tailored just for you\n- Participate in our lucky draws for a chance to win exciting prizes\n- Stay updated on the latest promotions and events\n\nDownload Turing Point App today and register with your name to start saving and winning! Hurry, don't miss out on the opportunity!\n\nIf you have any questions or need assistance with registration, feel free to contact our customer support team at 8140470004.\n\nBest regards,\nTuring Point Team`
+        );
+        await axios.post(`http://wa.me/${phone}?text=${message}`);
         res.status(201).json({ message: "Contractor created successfully", data: newContractor });
     } catch (error) {
         console.error(error);
