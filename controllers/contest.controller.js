@@ -606,6 +606,7 @@ export const joinContestByCoupon = async (req, res, next) => {
 
         // Repeat the operation specified number of times
         for (let i = 0; i < repeatCount; i++) {
+            let UserObj = await userModel.findById(req.user.userId).lean().exec();
             // Create entry for user's join
             let userContestObj = {
                 contestId: ContestObj._id,
