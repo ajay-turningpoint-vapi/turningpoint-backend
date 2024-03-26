@@ -71,10 +71,12 @@ export const generateCoupon = async (req, res, next) => {
         next(err);
     }
 };
-
 export const getAllCoupons = async (req, res, next) => {
     try {
         let query = {};
+        let page = req.query.page ? parseInt(req.query.page) : 1; // Default to page 1 if not provided
+        let pageSize = req.query.pageSize ? parseInt(req.query.pageSize) : 10; // Default page size to 10 if not provided
+
         if (req.query.couponUsed && req.query.couponUsed != "All") {
             query.maximumNoOfUsersAllowed = parseInt(req.query.couponUsed);
         }
@@ -82,7 +84,14 @@ export const getAllCoupons = async (req, res, next) => {
             query.productId = req.query.productId;
         }
 
-        let couponsArr = await Coupon.find(query).sort({ createdAt: -1 }).lean().exec();
+        let totalCount = await Coupon.countDocuments(query); // Get total count of documents matching query
+
+        let couponsArr = await Coupon.find(query)
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * pageSize) // Skip documents based on pagination
+            .limit(pageSize) // Limit the number of documents per page
+            .lean()
+            .exec();
 
         for (const coupon of couponsArr) {
             if (coupon.productId) {
@@ -90,7 +99,15 @@ export const getAllCoupons = async (req, res, next) => {
             }
         }
 
-        res.status(200).json({ message: "found all coupons", data: couponsArr, success: true });
+        res.status(200).json({
+            message: "Found all coupons",
+            data: couponsArr,
+            currentPage: page,
+            pageSize: pageSize,
+            totalCount: totalCount,
+            totalPages: Math.ceil(totalCount / pageSize),
+            success: true,
+        });
     } catch (error) {
         console.error(error);
         next(error);

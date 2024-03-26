@@ -23,6 +23,7 @@ import {
     getAllGeofence,
     deletedGeofence,
     location,
+    testupdate,
 } from "../controllers/users.controller";
 import { authorizeJwt } from "../middlewares/auth.middleware";
 import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
@@ -35,6 +36,7 @@ router.post("/logout", userLogOut);
 router.post("/login", login);
 router.post("/checkPhoneNumber", checkPhoneNumber);
 router.patch("/updateUserStatus/:id", updateUserStatus);
+router.put("/updateStatus", testupdate);
 router.patch("/updateUserKycStatus/:id", updateUserKycStatus);
 router.patch("/update-profile", authorizeJwt, updateUserProfile);
 router.patch("/update-profile-image", authorizeJwt, updateUserProfileImage);

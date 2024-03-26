@@ -53,10 +53,17 @@ export const getPointHistory = async (req, res, next) => {
         }
 
         if (req.query.q && req.query.q != "") {
-            query.transactionId = { $regex: ".*" + req.query.q + ".*" };
+            query["user.phone"] = { $regex: ".*" + req.query.q + ".*" };
         }
 
         let pointHistoryArr = [];
+        let count = 0;
+        let totalPages = 0; // Initialize totalPages variable
+
+        count = await pointHistory.countDocuments(query).exec();
+
+        // Calculate total pages
+        totalPages = Math.ceil(count / limit);
 
         let pipeline = [
             {
@@ -81,7 +88,6 @@ export const getPointHistory = async (req, res, next) => {
         ];
 
         if (req.query.transactions) {
-            // If you want to include additionalInfo, modify the pipeline
             pipeline.push({
                 $project: {
                     _id: "$origionalId",
@@ -100,21 +106,17 @@ export const getPointHistory = async (req, res, next) => {
             });
         }
 
-        console.log(JSON.stringify(pipeline, null, 2), "pipeline");
-
         pointHistoryArr = await pointHistory.aggregate(pipeline);
-
         for (let pointHistory of pointHistoryArr) {
             let UserObj = await Users.findById(pointHistory.userId).lean().exec();
             pointHistory.user = UserObj;
         }
 
-        res.status(200).json({ message: "List of points history", data: pointHistoryArr, limit: limit, page: page + 1, success: true });
+        res.status(200).json({ message: "List of points history", data: pointHistoryArr, count: count, totalPages: totalPages, limit: limit, page: page + 1, success: true });
     } catch (err) {
         next(err);
     }
 };
-
 export const getPointHistoryMobile = async (req, res, next) => {
     try {
         let query = {};

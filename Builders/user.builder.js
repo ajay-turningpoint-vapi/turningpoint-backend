@@ -8,7 +8,7 @@ export const UserList = (payload) => {
     //     matchCondition.role = { $regex: new RegExp(`\\s+${payload.role.trim()}|${payload.role.trim()}`), $options: "-i" };
     // }
 
-    sortCondition = { createdAt: -1 };
+    sortCondition = { createdAt: -1, isActive: -1 };
 
     pipeline.push(
         { $match: matchCondition },

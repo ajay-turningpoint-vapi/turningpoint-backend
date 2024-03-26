@@ -3,13 +3,13 @@ import ActivityLog from "../models/activityLogs.model";
 import User from "../models/user.model";
 export const getUserActivities = async (req, res, next) => {
     try {
-        const allActivityLogs = await ActivityLog.find().populate("userId");
+        const allActivityLogs = await ActivityLog.find().populate("userId").sort({ createdAt: -1 });
 
         // Map activity logs and format timestamps
         const formattedLogs = allActivityLogs.map((log) => {
             return {
-                logId:log._id,
-                userId:log.userId._id,
+                logId: log._id,
+                userId: log.userId._id,
                 name: log.userId.name, // Include other user properties as needed
                 type: log.type,
                 timestamp: log.timestamp.toLocaleString(), // Convert timestamp to human-readable format
@@ -25,11 +25,8 @@ export const getUserActivities = async (req, res, next) => {
 
 export const getUserActivitiesById = async (req, res, next) => {
     try {
-        
         let query = {};
         // Pagination parameters
-     
-        console.log(req.query.userId);
         if (req.query.userId) {
             query.userId = new mongoose.Types.ObjectId(req.query.userId);
         }
@@ -40,8 +37,7 @@ export const getUserActivitiesById = async (req, res, next) => {
         }
 
         // Retrieve activity logs by user ID using the ActivityLog model with pagination
-        const userActivityLogs = await ActivityLog.find(query)
-            .sort({ timestamp: -1 })
+        const userActivityLogs = await ActivityLog.find(query).sort({ _id: -1 });
 
         // Map activity logs and format timestamps
         const formattedLogs = userActivityLogs.map((log) => {

@@ -323,6 +323,7 @@ export const updateUserProfile = async (req, res, next) => {
                 if (req.body.idBackImage) {
                     req.body.idBackImage = await storeFileAndReturnNameBase64(req.body.idBackImage);
                 }
+                req.body.kycStatus = false;
             } else {
                 req.body.isActive = false;
             }
@@ -341,7 +342,6 @@ export const updateUserProfile = async (req, res, next) => {
                 },
             ];
             req.body.bankDetails = bankDetails;
-            req.body.kycStatus = false;
         }
 
         userObj = await Users.findByIdAndUpdate(req.user.userId, req.body).exec();
@@ -410,13 +410,10 @@ export const updateUserKycStatus = async (req, res, next) => {
 };
 export const getUsers = async (req, res, next) => {
     try {
-        console.log(req.query);
         const UsersPipeline = UserList(req.query);
-        console.log(UsersPipeline);
         let UsersArr = await Users.aggregate(UsersPipeline);
         // let UserObj = await Users.find();
         UsersArr = UsersArr.filter((el) => el.role != rolesObj.ADMIN);
-        console.log(UsersArr);
         res.status(200).json({ message: "Users", data: UsersArr, success: true });
     } catch (error) {
         console.error(error);
@@ -609,6 +606,20 @@ export const getUserContests = async (req, res, next) => {
     } catch (error) {
         console.error(error);
         next(error);
+    }
+};
+
+export const testupdate = async (req, res) => {
+    try {
+        // Find documents with rank 0
+        const filter = { rank: "0" }; // Assuming rank is stored as a string, adjust as needed
+        // Update all documents with rank 0
+        const result = await UserContest.updateMany(filter, { status: "join" }); // Assuming you want to update the status to 'win'
+
+        res.json({ message: "Update successful", result });
+    } catch (error) {
+        console.error("Update error:", error);
+        res.status(500).json({ message: "Internal server error" });
     }
 };
 

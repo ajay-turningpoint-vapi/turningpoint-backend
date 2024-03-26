@@ -43,6 +43,7 @@ const handleFileUpload = async (req, res, next) => {
         next();
     } catch (error) {
         next(error);
+        res.status(500).json({ error: "Internal Server Error" });
     }
 };
 // const handleFileUpload = async (req, res, next) => {

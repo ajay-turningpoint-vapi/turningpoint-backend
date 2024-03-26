@@ -155,7 +155,6 @@ export const getCurrentContest = async (req, res, next) => {
     }
 };
 
-
 export const getContest = async (req, res, next) => {
     try {
         let pipeline = [
@@ -585,7 +584,7 @@ export const joinContest = async (req, res, next) => {
     }
 };
 
-export const joinContestByCoupon = async (req, res, next) => {
+export const joinContestByCoupon1 = async (req, res, next) => {
     try {
         let ContestObj = await Contest.findById(req.params.id).exec();
         if (!ContestObj) throw { status: 400, message: "Contest Not Found" };
@@ -630,6 +629,68 @@ export const joinContestByCoupon = async (req, res, next) => {
                 userId: req.user.userId,
                 type: "Joined Contest",
             });
+        }
+
+        res.status(200).json({ message: "Contest Joined Successfully", success: true, count: userJoinCount });
+    } catch (err) {
+        next(err);
+    }
+};
+export const joinContestByCoupon = async (req, res, next) => {
+    try {
+        let ContestObj = await Contest.findById(req.params.id).exec();
+        if (!ContestObj) throw { status: 400, message: "Contest Not Found" };
+
+        let UserObj = await userModel.findById(req.user.userId).lean().exec();
+        if (!UserObj) throw { status: 400, message: "User Not Found" };
+
+        let points = ContestObj.points;
+        if (UserObj.points <= 0 || UserObj.points < points * req.body.count) {
+            throw { status: 400, message: "Insufficient balance" };
+        }
+
+        // Number of times to repeat the operation
+        const repeatCount = parseInt(req.body.count) || 1;
+
+        // Initialize user join count
+        let userJoinCount = 0;
+
+        // Check if user has sufficient balance before starting the loop
+        if (UserObj.points >= points * repeatCount) {
+            // Repeat the operation specified number of times
+            for (let i = 0; i < repeatCount; i++) {
+                let UserObj = await userModel.findById(req.user.userId).lean().exec();
+
+                // Check if user has sufficient balance for this iteration
+                if (UserObj.points >= points) {
+                    // Create entry for user's join
+                    let userContestObj = {
+                        contestId: ContestObj._id,
+                        userId: UserObj._id,
+                        userJoinStatus: true, // Set userJoinStatus to true when joining
+                    };
+                    // Save user's join entry
+                    await userContest.create(userContestObj);
+                    // Deduct points from user's balance
+                    let updatedUserPoints = UserObj.points - parseInt(points);
+                    await userModel.findByIdAndUpdate(req.user.userId, { points: updatedUserPoints });
+                    await Contest.findByIdAndUpdate(req.params.id, { $inc: { userJoin: 1 } });
+                    // Update total user join count
+                    userJoinCount += 1;
+
+                    // Log point transaction
+                    let pointDescription = ContestObj.name + " Contest Joined with " + points + " Points";
+                    let mobileDescription = "Contest";
+                    await createPointlogs(req.user.userId, points, pointTransactionType.DEBIT, pointDescription, mobileDescription, "success");
+                    await activityLogsModel.create({
+                        userId: req.user.userId,
+                        type: "Joined Contest",
+                    });
+                } else {
+                    // If user doesn't have sufficient balance for this iteration, break the loop
+                    break;
+                }
+            }
         }
 
         res.status(200).json({ message: "Contest Joined Successfully", success: true, count: userJoinCount });

@@ -59,14 +59,13 @@ export const checkContest = async (date, time) => {
                     }
                     userEntries[user.userId]++;
                 }
-                // Shuffle user IDs to ensure randomness in prize distribution
-                let shuffledUserIds = Object.keys(userEntries);
-                shuffleArray(shuffledUserIds);
 
-                // Assign prizes to users based on available entries
+                // Sort user entries in descending order
+                let sortedUserEntries = Object.entries(userEntries).sort((a, b) => b[1] - a[1]);
+
+                // Assign prizes to users based on available entries and prize ranking
                 let prizeIndex = 0;
-                for (const userId of shuffledUserIds) {
-                    let entries = userEntries[userId];
+                for (const [userId, entries] of sortedUserEntries) {
                     if (prizeIndex >= contestPrizes.length) {
                         // Break if all prizes have been awarded
                         break;
@@ -92,11 +91,3 @@ export const checkContest = async (date, time) => {
         console.error(error);
     }
 };
-
-// Function to shuffle array elements
-function shuffleArray(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-}
