@@ -6,10 +6,7 @@ import userModel from "../models/user.model";
 import { createPointlogs } from "./pointHistory.controller";
 import { pointTransactionType } from "./../helpers/Constants";
 import activityLogsModel from "../models/activityLogs.model";
-const NodeCache = require("node-cache");
-const cache = new NodeCache({ stdTTL: 3600 });
 let Contestintial = "TNPC";
-
 export const addContest = async (req, res, next) => {
     try {
         // if (req.body.image) {
@@ -698,7 +695,26 @@ export const joinContestByCoupon = async (req, res, next) => {
         next(err);
     }
 };
+export const test = async (req, res) => {
+    try {
+        // Extract the contestId from the query parameters
+        const contestId = req.query.contestId;
 
+        // Ensure contestId is provided
+        if (!contestId) {
+            return res.status(400).json({ error: "Contest ID is required" });
+        }
+
+        // Aggregate to get the count of each user's occurrences for the specified contestId
+        const userCounts = await userContest.aggregate([{ $match: { contestId: contestId } }, { $group: { _id: "$userId", count: { $sum: 1 }, users: { $push: "$$ROOT" } } }]).exec();
+
+        // Return the aggregated data
+        res.status(200).json(userCounts);
+    } catch (error) {
+        console.error("Error fetching user counts for contest:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
 // export const joinContest = async (req, res, next) => {
 //     try {
 //         let ContestObj = await Contest.findById(req.params.id).exec();
@@ -956,7 +972,6 @@ export const getCurrentContestRewards = async (req, res, next) => {
     try {
         // Get the current date and time
         const currentDateTime = new Date();
-
         // Find the most recent closed contest whose end date is before or equal to the current date
         const currentContest = await Contest.findOne({
             status: "CLOSED",

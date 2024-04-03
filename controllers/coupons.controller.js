@@ -71,6 +71,17 @@ export const generateCoupon = async (req, res, next) => {
         next(err);
     }
 };
+
+export const getCouponCount = async (req, res) => {
+    try {
+        const count = await Coupon.countDocuments();
+        res.json(count);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 export const getAllCoupons = async (req, res, next) => {
     try {
         let query = {};
@@ -102,10 +113,10 @@ export const getAllCoupons = async (req, res, next) => {
         res.status(200).json({
             message: "Found all coupons",
             data: couponsArr,
-            currentPage: page,
-            pageSize: pageSize,
-            totalCount: totalCount,
-            totalPages: Math.ceil(totalCount / pageSize),
+            page: page,
+            limit: pageSize,
+            totalPage: Math.ceil(totalCount / pageSize),
+            count: totalCount,
             success: true,
         });
     } catch (error) {

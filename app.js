@@ -36,6 +36,7 @@ import wishlist from "./routes/wishlist.routes";
 import { checkContest } from "./Services/ContestCron";
 
 import fileRouter from "./routes/fileRouter.routes";
+import activityLogsModel from "./models/activityLogs.model";
 
 const app = express();
 
@@ -76,11 +77,38 @@ app.use("/map", geofenceRouter);
 app.use("/logs", activityLogsRouter);
 app.use("/newContractor", newContractorRouter);
 app.use("/", fileRouter);
-const job = schedule.scheduleJob("*/1 * * * *", function () {
-    let date = format(new Date(), "yyyy-MM-dd");
-    let time = format(new Date(), "HH-mm");
-    console.log("RUNNING", date, time);
-    checkContest(date, time);
+// const job = schedule.scheduleJob("*/1 * * * *", function () {
+//     let date = format(new Date(), "yyyy-MM-dd");
+//     let time = format(new Date(), "HH-mm");
+//     console.log("RUNNING", date, time);
+//     checkContest(date, time);
+// });
+
+const job = schedule.scheduleJob("*/1 * * * *", async function () {
+    try {
+        // Get the current date and time
+        const currentDate = new Date();
+        const sixMinutesLater = new Date(currentDate.getTime() + 6 * 60 * 1000); // 6 minutes in the future
+
+        // Get the date and time in the required format
+        const date = format(sixMinutesLater, "yyyy-MM-dd");
+        const time = format(sixMinutesLater, "HH-mm");
+
+        console.log("RUNNING", date, time);
+        await checkContest(date, time);
+    } catch (error) {
+        console.error("Error in scheduling job:", error);
+    }
+});
+
+const retentionPeriod = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+const thresholdDate = new Date(Date.now() - retentionPeriod);
+activityLogsModel.deleteMany({ createdAt: { $lt: thresholdDate } }, (err, result) => {
+    if (err) {
+        console.error("Error deleting activity logs:", err);
+    } else {
+        console.log(`Deleted ${result.deletedCount} activity logs older than ${thresholdDate}`);
+    }
 });
 app.use(errorHandler);
 

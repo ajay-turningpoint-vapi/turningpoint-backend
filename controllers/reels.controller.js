@@ -2,9 +2,7 @@ import { storeFileAndReturnNameBase64 } from "../helpers/fileSystem";
 import Reels from "../models/reels.model";
 import ReelLikes from "../models/reelLikes.model";
 import ActivityLog from "../models/activityLogs.model";
-import mongoose from "mongoose";
-const NodeCache = require("node-cache");
-const cache = new NodeCache({ stdTTL: 3600 });
+
 export const addReels = async (req, res, next) => {
     try {
         const uploadedFiles = req.files || [];
@@ -54,68 +52,9 @@ export const getReels = async (req, res, next) => {
         next(err);
     }
 };
-const shuffleArray = (array) => {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-};
-const getReelsFromCacheOrDatabase = async (req) => {
-    // Add req as a parameter
-    const cachedReels = cache.get("reels");
-    if (cachedReels) {
-        console.log("Data found in cache!");
-        return shuffleArray([...cachedReels]);
-    } else {
-        console.log("Data not found in cache. Fetching from database...");
-        try {
-            const totalCount = await Reels.countDocuments();
-            if (totalCount === 0) {
-                return [];
-            }
-            const reelsArr = await Reels.aggregate([{ $sample: { size: totalCount } }]);
-            const reelsWithLikedStatus = await Promise.all(
-                reelsArr.map(async (reel) => {
-                    const likedStatus = await ReelLikes.findOne({
-                        userId: req.user.userId,
-                        reelId: reel._id,
-                    });
-                    return {
-                        ...reel,
-                        likedByCurrentUser: likedStatus !== null,
-                    };
-                })
-            );
 
-            cache.set("reels", reelsWithLikedStatus);
-            return reelsWithLikedStatus;
-        } catch (error) {
-            console.error("Error fetching data from database:", error);
-            throw error;
-        }
-    }
-};
-
-export const getReelsPaginated1 = async (req, res, next) => {
+export const getReelsPaginated2 = async (req, res, next) => {
     try {
-        if (!req.user) {
-            return res.status(401).json({ message: "Unauthorized" });
-        }
-        const reels = await getReelsFromCacheOrDatabase(req); // Pass req here
-        await ActivityLog.create({
-            userId: req.user.userId,
-            type: "Watching Reels",
-        });
-        res.status(200).json({ message: "Reels Found", data: reels, success: true });
-    } catch (err) {
-        console.error(err);
-        next(err);
-    }
-};
-
-export const getReelsPaginated = async (req, res, next) => {
-    try {   
         if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });
         }
@@ -150,6 +89,58 @@ export const getReelsPaginated = async (req, res, next) => {
         });
 
         res.status(200).json({ message: "Reels Found", data: reelsWithLikedStatus, success: true });
+    } catch (err) {
+        console.error(err);
+        next(err);
+    }
+};
+export const getReelsPaginated = async (req, res, next) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        // Pagination parameters
+        let page = parseInt(req.query.page) || 1;
+        let pageSize = parseInt(req.query.pageSize) || 10;
+
+        // Count total reels
+        let totalCount = await Reels.countDocuments();
+        if (totalCount === 0) {
+            return res.status(404).json({ message: "No reels found", success: false });
+        }
+
+        // Calculate total pages
+        let totalPages = Math.ceil(totalCount / pageSize);
+
+        // Generate a random offset for pagination
+        let randomOffset = Math.floor(Math.random() * (totalCount - pageSize));
+
+        // Retrieve reels for the current page with random offset
+        let reelsArr = await Reels.find().skip(randomOffset).limit(pageSize).lean().exec();
+
+        // Fetch liked status for each reel and create a new array with modified structure
+        const reelsWithLikedStatus = await Promise.all(
+            reelsArr.map(async (reel) => {
+                const likedStatus = await ReelLikes.findOne({
+                    userId: req.user.userId,
+                    reelId: reel._id,
+                });
+
+                return {
+                    ...reel,
+                    likedByCurrentUser: likedStatus !== null, // Will be true or false
+                };
+            })
+        );
+
+        // Log the activity
+        await ActivityLog.create({
+            userId: req.user.userId,
+            type: "Watching Reels",
+        });
+
+        res.status(200).json({ message: "Reels Found", data: reelsWithLikedStatus, totalPages: totalPages, success: true });
     } catch (err) {
         console.error(err);
         next(err);

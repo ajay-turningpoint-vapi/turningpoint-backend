@@ -58,9 +58,10 @@ let User = mongoose.Schema(
         ],
         upiId: String,
         kycStatus: {
-            type: Boolean,
-            default: null,
+            type: String,
+            default: "pending",
         },
+        isOnline: { type: Boolean, default: false },
         visitingCard: { type: String },
         shopImageArr: [{ shopImage: { type: String } }],
         fcmToken: { type: String, required: true },

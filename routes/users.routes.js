@@ -24,6 +24,8 @@ import {
     deletedGeofence,
     location,
     testupdate,
+    getPointHistoryByUserId,
+    updateUserOnlineStatus,
 } from "../controllers/users.controller";
 import { authorizeJwt } from "../middlewares/auth.middleware";
 import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
@@ -38,10 +40,12 @@ router.post("/checkPhoneNumber", checkPhoneNumber);
 router.patch("/updateUserStatus/:id", updateUserStatus);
 router.put("/updateStatus", testupdate);
 router.patch("/updateUserKycStatus/:id", updateUserKycStatus);
+router.patch("/updateUserOnlineStatus", authorizeJwt, updateUserOnlineStatus);
 router.patch("/update-profile", authorizeJwt, updateUserProfile);
 router.patch("/update-profile-image", authorizeJwt, updateUserProfileImage);
 router.get("/getAllCaprenterByContractorName", authorizeJwt, getAllCaprenterByContractorName);
 router.get("/getUserStatsReport/:id", getUserStatsReport);
+router.get("/getUserPointHistoryById", getPointHistoryByUserId);
 router.get("/getUsers", getUsers);
 router.get("/getContractors", getContractors);
 router.get("/getUserById/:id", authorizeJwt, getUserById);

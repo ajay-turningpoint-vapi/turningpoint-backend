@@ -4,8 +4,6 @@ import User from "../models/user.model";
 export const getUserActivities = async (req, res, next) => {
     try {
         const allActivityLogs = await ActivityLog.find().populate("userId").sort({ createdAt: -1 });
-
-        // Map activity logs and format timestamps
         const formattedLogs = allActivityLogs.map((log) => {
             return {
                 logId: log._id,
@@ -55,3 +53,5 @@ export const getUserActivitiesById = async (req, res, next) => {
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
+
+

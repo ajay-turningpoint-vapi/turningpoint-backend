@@ -25,6 +25,18 @@ export const createPointlogs = async (userId, amount, type, description, mobileD
     }
 };
 
+export const getPointHistoryCount = async (req, res) => {
+    try {
+        const count = await pointHistory.countDocuments();
+        res.json(count);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+
+
 export const getPointHistory = async (req, res, next) => {
     try {
         let limit = 0;

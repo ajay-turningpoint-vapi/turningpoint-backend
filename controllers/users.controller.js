@@ -7,12 +7,10 @@ import { ValidateEmail, validNo } from "../helpers/Validators";
 import Users from "../models/user.model";
 import UserContest from "../models/userContest";
 import Contest from "../models/contest.model";
-
-import mongoose from "mongoose";
 import pointHistoryModel from "../models/pointHistory.model";
 import admin from "../helpers/firebase";
 import { createPointlogs } from "./pointHistory.controller";
-import { sendNotification, sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
+import { sendNotification, sendNotificationMessage, sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
 import Geofence from "../models/geoFence.modal";
 const geolib = require("geolib");
 export const googleLogin = async (req, res) => {
@@ -323,7 +321,7 @@ export const updateUserProfile = async (req, res, next) => {
                 if (req.body.idBackImage) {
                     req.body.idBackImage = await storeFileAndReturnNameBase64(req.body.idBackImage);
                 }
-                req.body.kycStatus = false;
+                req.body.kycStatus = "submitted";
             } else {
                 req.body.isActive = false;
             }
@@ -371,20 +369,23 @@ export const updateUserStatus = async (req, res, next) => {
     try {
         const userId = req.params.id;
         const { status } = req.body;
-
         let userObj = await Users.findById(userId).exec();
         if (!userObj) {
             throw new Error("User Not found");
         }
-
         await Users.findByIdAndUpdate(userId, { isActive: status }).exec();
-        // req.body = {
-        //     title: "User Status Update",
-        //     body: "Your status has been updated successfully.",
-        // };
-        // await sendSingleNotificationMiddleware(req, res, next);
-
         res.status(201).json({ message: "User Active Status Updated Successfully", success: true });
+        next();
+
+        if (status === false) {
+            const title = "User Active Status Updated";
+            const body = `You profile has been disabled by the admin`;
+            await sendNotificationMessage(userId, title, body);
+        } else {
+            const title = "User Active Status Updated";
+            const body = `You profile has been approved by the admin `;
+            await sendNotificationMessage(userId, title, body);
+        }
     } catch (err) {
         next(err);
     }
@@ -394,20 +395,44 @@ export const updateUserKycStatus = async (req, res, next) => {
     try {
         const userId = req.params.id;
         const { kycStatus } = req.body;
-        if (typeof kycStatus !== "boolean") {
-            return res.status(400).json({ message: "Invalid status value. Status must be a boolean.", success: false });
-        }
         const userObj = await Users.findById(userId).exec();
         if (!userObj) {
             return res.status(404).json({ message: "User not found", success: false });
         }
         await Users.findByIdAndUpdate(userId, { kycStatus: kycStatus }).exec();
         res.status(201).json({ message: "User KYC Status Updated Successfully", success: true });
+        next();
+        if (kycStatus === "approved") {
+            const title = "KYC Status Approved";
+            const body = `Your KYC has been approved. Enjoy lucky draws & rewards!`;
+            await sendNotificationMessage(userId, title, body);
+        }
+        if (kycStatus === "rejected") {
+            const title = "KYC Status Rejected";
+            const body = `Your KYC submission has been rejected. Please review and resubmit.`;
+            await sendNotificationMessage(userId, title, body);
+        }
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: "Internal Server Error", success: false });
     }
 };
+
+export const updateUserOnlineStatus = async (req, res) => {
+    try {
+        const { userId } = req.user;
+        const { isOnline } = req.body;
+        const updatedUser = await Users.findByIdAndUpdate(userId, { isOnline }, { new: true });
+        if (!updatedUser) {
+            return res.status(404).json({ error: "User not found" });
+        }
+        res.json({ user: updatedUser });
+    } catch (error) {
+        console.error("Error updating user activity", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 export const getUsers = async (req, res, next) => {
     try {
         const UsersPipeline = UserList(req.query);
@@ -502,7 +527,6 @@ export const getUserById = async (req, res, next) => {
         userObj.contestsParticipatedInCount = contestsParticipatedInCount.length;
         userObj.contestWonCount = contestWonCount;
         userObj.contestUniqueWonCount = contestUniqueWonCount?.length ? contestUniqueWonCount?.length : 0;
-
         res.status(200).json({ message: "User found", data: userObj, success: true });
     } catch (error) {
         console.error(error);
@@ -590,11 +614,44 @@ export const getActiveCustomer = async (req, res, next) => {
         next(error);
     }
 };
-
 export const getUserContests = async (req, res, next) => {
     try {
-        let UserContests = await UserContest.find().lean().exec();
-        for (let contest of UserContests) {
+        // Pagination parameters
+        let page = parseInt(req.query.page) || 1;
+        let pageSize = parseInt(req.query.pageSize) || 10;
+
+        // Search parameters
+        let searchQuery = {};
+        let rank = parseInt(req.query.q);
+        if (!isNaN(rank)) {
+            searchQuery.rank = rank;
+        } else {
+            // Search based on username or contest name
+            const q = req.query.q;
+            if (q) {
+                const users = await Users.find({ name: { $regex: q, $options: "i" } })
+                    .select("_id")
+                    .exec();
+                const contests = await Contest.find({ name: { $regex: q, $options: "i" } })
+                    .select("_id")
+                    .exec();
+                searchQuery.$or = [{ userId: { $in: users.map((user) => user._id) } }, { contestId: { $in: contests.map((contest) => contest._id) } }];
+            }
+        }
+
+        // Count total documents
+        let totalCount = await UserContest.countDocuments(searchQuery);
+
+        // Find user contests based on search query and pagination
+        let userContests = await UserContest.find(searchQuery)
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * pageSize)
+            .limit(pageSize)
+            .lean()
+            .exec();
+
+        // Populate userObj and contestObj
+        for (let contest of userContests) {
             if (contest.userId) {
                 contest.userObj = await Users.findById(contest.userId).exec();
             }
@@ -602,7 +659,32 @@ export const getUserContests = async (req, res, next) => {
                 contest.contestObj = await Contest.findById(contest.contestId).exec();
             }
         }
-        res.status(200).json({ message: "User Contest", data: UserContests, success: true });
+
+        // Create a map to store user contest counts
+        const userContestCounts = new Map();
+        for (const contest of userContests) {
+            const key = `${contest.userId}_${contest.contestId}`;
+            userContestCounts.set(key, (userContestCounts.get(key) || 0) + 1);
+        }
+
+        // Add join count to each contest object in the array
+        for (const contest of userContests) {
+            const key = `${contest.userId}_${contest.contestId}`;
+            contest.joinCount = userContestCounts.get(key);
+        }
+
+        // Calculate total pages
+        let totalPages = Math.ceil(totalCount / pageSize);
+
+        res.status(200).json({
+            message: "User Contest",
+            data: userContests,
+            page: page,
+            limit: pageSize,
+            totalCount: totalCount,
+            totalPages: totalPages,
+            success: true,
+        });
     } catch (error) {
         console.error(error);
         next(error);
@@ -614,12 +696,73 @@ export const testupdate = async (req, res) => {
         // Find documents with rank 0
         const filter = { rank: "0" }; // Assuming rank is stored as a string, adjust as needed
         // Update all documents with rank 0
-        const result = await UserContest.updateMany(filter, { status: "join" }); // Assuming you want to update the status to 'win'
+        const result = await UserContest.updateMany(filter, { rank: "0", kycStatus: "join" }); // Assuming you want to update the status to 'win'
 
         res.json({ message: "Update successful", result });
     } catch (error) {
         console.error("Update error:", error);
         res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const getPointHistoryByUserId = async (req, res) => {
+    try {
+        let query = {}; // Initialize an empty query object
+
+        // Check if userId query parameter exists
+        if (!req.query.userId) {
+            return res.status(400).json({ error: "userId parameter is required" });
+        }
+        query.userId = req.query.userId; // Add userId to the query
+
+        // Check if the query parameter s is present and equals "ReelsLike"
+        if (req.query.s && req.query.s === "ReelsLike") {
+            // If s=ReelsLike, add additional filter to the query for description
+            (query.type = "CREDIT"), (query.description = { $regex: "liking a reel", $options: "i" });
+        }
+
+        // Check if the query parameter s is present and equals "Contest"
+        if (req.query.s && req.query.s === "Contest") {
+            // If s=Contest, add additional filter to the query for description
+            (query.type = "DEBIT"), (query.status = { $nin: ["reject", "pending"] });
+            query.description = { $regex: "Contest Joined", $options: "i" };
+        }
+
+        // Check if the query parameter s is present and equals "Scan"
+        if (req.query.s && req.query.s === "Coupon") {
+            // If s=Scan, add additional filter to the query for description
+            query.type = "CREDIT";
+            query.description = { $regex: "Coupon Earned", $options: "i" };
+        }
+
+        // Check if the query parameter s is present and equals "Redem"
+        if (req.query.s && req.query.s === "Redeem") {
+            // If s=Redem, add additional filter to the query for description
+            query.type = "DEBIT";
+            query.status = { $nin: ["reject", "pending"] };
+        }
+
+        // Pagination parameters
+        let page = parseInt(req.query.page) || 1;
+        let pageSize = parseInt(req.query.pageSize) || 10;
+
+        // Find total count of documents matching the query
+        const totalCount = await pointHistoryModel.countDocuments(query);
+
+        // Calculate total pages based on total count and page size
+        const totalPages = Math.ceil(totalCount / pageSize);
+
+        // Find documents based on the query with pagination
+        const pointHistoryData = await pointHistoryModel
+            .find(query)
+            .skip((page - 1) * pageSize) // Skip documents based on pagination
+            .limit(pageSize) // Limit the number of documents per page
+            .exec();
+
+        res.json({ data: pointHistoryData, totalPages, success: true, page, totalPages, totalCount, message: "User point history" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal server error" });
     }
 };
 
