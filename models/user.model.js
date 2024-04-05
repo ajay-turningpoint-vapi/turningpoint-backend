@@ -62,6 +62,7 @@ let User = mongoose.Schema(
             default: "pending",
         },
         isOnline: { type: Boolean, default: false },
+        selfie:  String ,
         visitingCard: { type: String },
         shopImageArr: [{ shopImage: { type: String } }],
         fcmToken: { type: String, required: true },
