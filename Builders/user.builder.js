@@ -7,7 +7,9 @@ export const UserList = (payload) => {
     // if (payload.role != "") {
     //     matchCondition.role = { $regex: new RegExp(`\\s+${payload.role.trim()}|${payload.role.trim()}`), $options: "-i" };
     // }
-  
+    if (payload.kycStatus) {
+        matchCondition.kycStatus = payload.kycStatus;
+    }
     sortCondition = { isActive: 1, kycStatus: 1, createdAt: -1 };
     pipeline.push(
         { $match: matchCondition },
@@ -38,7 +40,7 @@ export const UserList = (payload) => {
                 onlinePortal: 1,
                 kycStatus: 1,
                 createdAt: 1,
-                isOnline:1,
+                isOnline: 1,
             },
         },
         { $sort: sortCondition },

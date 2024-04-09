@@ -84,15 +84,16 @@ app.use("/", fileRouter);
 //     checkContest(date, time);
 // });
 
+
 const job = schedule.scheduleJob("*/1 * * * *", async function () {
     try {
         // Get the current date and time
         const currentDate = new Date();
-        const sixMinutesLater = new Date(currentDate.getTime() + 6 * 60 * 1000); // 6 minutes in the future
+        const fiveMinutesLater = new Date(currentDate.getTime() + 5 * 60 * 1000); // 5 minutes in the future
 
         // Get the date and time in the required format
-        const date = format(sixMinutesLater, "yyyy-MM-dd");
-        const time = format(sixMinutesLater, "HH-mm");
+        const date = format(fiveMinutesLater, "yyyy-MM-dd");
+        const time = format(fiveMinutesLater, "HH-mm");
 
         console.log("RUNNING", date, time);
         await checkContest(date, time);
@@ -100,7 +101,6 @@ const job = schedule.scheduleJob("*/1 * * * *", async function () {
         console.error("Error in scheduling job:", error);
     }
 });
-
 const retentionPeriod = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 const thresholdDate = new Date(Date.now() - retentionPeriod);
 activityLogsModel.deleteMany({ createdAt: { $lt: thresholdDate } }, (err, result) => {

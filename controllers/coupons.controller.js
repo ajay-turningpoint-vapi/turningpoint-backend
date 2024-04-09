@@ -12,6 +12,9 @@ import _ from "lodash";
 import { customAlphabet } from "nanoid";
 import mongoose from "mongoose";
 import activityLogsModel from "../models/activityLogs.model";
+import QRCode from "qrcode";
+import XLSX from "xlsx";
+import { saveAs } from "file-saver";
 const nanoid = customAlphabet("1234567890", 10);
 export const addCoupons = async (req, res, next) => {
     try {
@@ -190,8 +193,60 @@ export const getActiveCoupons = async (req, res, next) => {
         next(error);
     }
 };
-
 export const getActiveCouponsQrZip = async (req, res, next) => {
+    try {
+        let todayStart = new Date();
+        todayStart.setHours(0, 0, 0);
+
+        let CouponArr = await Coupon.find({ maximumNoOfUsersAllowed: 1 }).lean().exec();
+
+        // Prepare coupon data for Excel
+        const excelData = [];
+
+        for (const coupon of CouponArr) {
+            // Generate QR code for coupon
+            // const qrDataUrl = await QRCode.toDataURL(String(coupon._id));
+
+            // Add coupon data to Excel data
+            excelData.push({
+                CouponName: coupon.name,
+                CouponCode: coupon.value,
+                QRCode: coupon._id, // Store QR code data URL directly
+                // Add more fields as needed
+            });
+        }
+
+        // Create a new worksheet
+        const ws = XLSX.utils.json_to_sheet(excelData);
+
+        // Add QR code images to Excel sheet
+        for (let i = 0; i < CouponArr.length; i++) {
+            const qrDataUrl = excelData[i].QRCode;
+            const cellRef = `C${i + 2}`; // Assuming QR code data is in column C
+
+            // Add image data directly to cell
+            ws[cellRef] = { t: "s", v: qrDataUrl };
+        }
+
+        // Create a new workbook and add the worksheet
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Coupons");
+
+        // Convert workbook to binary Excel file
+        const excelBinary = XLSX.write(wb, { type: "binary" });
+
+        // Set response headers for Excel download
+        res.setHeader("Content-Disposition", 'attachment; filename="active_coupons.xlsx"');
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+        // Send Excel file as response
+        res.end(Buffer.from(excelBinary, "binary"));
+    } catch (error) {
+        console.error(error);
+        next(error);
+    }
+};
+export const getActiveCouponsQrZip1 = async (req, res, next) => {
     try {
         let todayStart = new Date();
         todayStart.setHours(0, 0, 0);

@@ -614,6 +614,94 @@ export const getActiveCustomer = async (req, res, next) => {
         next(error);
     }
 };
+
+export const getUserContestsReport = async (req, res, next) => {
+    try {
+        let page = parseInt(req.query.page) || 1;
+        let pageSize = parseInt(req.query.pageSize) || 10;
+        let searchQuery = {};
+        if (req.query.q === "winners") {
+            searchQuery.status = "win";
+            console.log("Search Query:", searchQuery);
+            const distinctWinners = await UserContest.aggregate([{ $match: searchQuery }, { $group: { _id: "$userId" } }]);
+            console.log(distinctWinners);
+        }
+        if (req.query.q === "losers") {
+            searchQuery.status = "lose";
+            searchQuery.rank = "0"; // Ensure rank is 0
+            console.log("Search Query:", searchQuery);
+
+            const distinctLosers = await UserContest.aggregate([{ $match: searchQuery }, { $group: { _id: "$userId" } }]);
+            console.log(distinctLosers.length);
+        }
+
+        // Calculate totalJoinCount before pagination
+        let totalJoinCount = await UserContest.countDocuments(searchQuery);
+        let userContests = await UserContest.find(searchQuery)
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * pageSize)
+            .limit(pageSize)
+            .lean()
+            .exec();
+        await Promise.all(
+            userContests.map(async (contest) => {
+                if (contest.userId) {
+                    contest.userObj = await Users.findById(contest.userId).exec();
+                }
+                if (contest.contestId) {
+                    contest.contestObj = await Contest.findById(contest.contestId).exec();
+                }
+            })
+        );
+        const groupedUserContests = userContests.reduce((acc, curr) => {
+            const userName = curr.userObj ? curr.userObj.name : "";
+            acc[userName] = [...(acc[userName] || []), curr];
+            return acc;
+        }, {});
+        userContests = Object.values(groupedUserContests).flat();
+
+        userContests.sort((a, b) => {
+            const rankA = parseInt(a.rank);
+            const rankB = parseInt(b.rank);
+            if (rankA === 0 && rankB !== 0) {
+                return 1;
+            } else if (rankA !== 0 && rankB === 0) {
+                return -1;
+            } else {
+                return rankB - rankA;
+            }
+        });
+
+        const userContestCounts = new Map();
+        for (const contest of userContests) {
+            const key = `${contest.userId}_${contest.contestId}`;
+            userContestCounts.set(key, (userContestCounts.get(key) || 0) + 1);
+        }
+
+        for (const contest of userContests) {
+            const key = `${contest.userId}_${contest.contestId}`;
+            contest.joinCount = userContestCounts.get(key);
+        }
+
+        let totalCount = await UserContest.countDocuments(searchQuery);
+        let totalPages = Math.ceil(totalCount / pageSize);
+        res.status(200).json({
+            message: "User Contest",
+            data: userContests,
+            page: page,
+            limit: pageSize,
+            totalCount: totalCount,
+            totalPages: totalPages,
+            totalJoinCount: totalJoinCount, // Return totalJoinCount
+            success: true,
+        });
+    } catch (error) {
+        console.error(error);
+        next(error);
+    }
+};
+
+
 export const getUserContests = async (req, res, next) => {
     try {
         // Pagination parameters
@@ -629,38 +717,54 @@ export const getUserContests = async (req, res, next) => {
             // Search based on username or contest name
             const q = req.query.q;
             if (q) {
-                const users = await Users.find({ name: { $regex: q, $options: "i" } })
-                    .select("_id")
-                    .exec();
-                const contests = await Contest.find({ name: { $regex: q, $options: "i" } })
-                    .select("_id")
-                    .exec();
+                const users = await Users.find({ name: { $regex: q, $options: "i" } }, "_id").exec();
+                const contests = await Contest.find({ name: { $regex: q, $options: "i" } }, "_id").exec();
                 searchQuery.$or = [{ userId: { $in: users.map((user) => user._id) } }, { contestId: { $in: contests.map((contest) => contest._id) } }];
             }
         }
 
-        // Count total documents
-        let totalCount = await UserContest.countDocuments(searchQuery);
-
         // Find user contests based on search query and pagination
-        let userContests = await UserContest.find(searchQuery)
-            .sort({ createdAt: -1 })
-            .skip((page - 1) * pageSize)
-            .limit(pageSize)
-            .lean()
-            .exec();
+        let userContests = await UserContest.find(searchQuery).lean().exec();
 
-        // Populate userObj and contestObj
-        for (let contest of userContests) {
-            if (contest.userId) {
-                contest.userObj = await Users.findById(contest.userId).exec();
-            }
-            if (contest.contestId) {
-                contest.contestObj = await Contest.findById(contest.contestId).exec();
-            }
-        }
+        // Populate userObj and contestObj in batches
+        await Promise.all(
+            userContests.map(async (contest) => {
+                if (contest.userId) {
+                    contest.userObj = await Users.findById(contest.userId).exec();
+                }
+                if (contest.contestId) {
+                    contest.contestObj = await Contest.findById(contest.contestId).exec();
+                }
+            })
+        );
 
-        // Create a map to store user contest counts
+        // Group user contests by user name in ascending order
+        const groupedUserContests = userContests.reduce((acc, curr) => {
+            const userName = curr.userObj ? curr.userObj.name : "";
+            acc[userName] = [...(acc[userName] || []), curr];
+            return acc;
+        }, {});
+
+        // Flatten the grouped user contests
+        userContests = Object.values(groupedUserContests).flat();
+
+        // Sort user contests by rank (descending)
+        userContests.sort((a, b) => {
+            // Convert rank to integers
+            const rankA = parseInt(a.rank);
+            const rankB = parseInt(b.rank);
+
+            // If either rank is 0, push it to the end
+            if (rankA === 0 && rankB !== 0) {
+                return 1;
+            } else if (rankA !== 0 && rankB === 0) {
+                return -1;
+            } else {
+                // Otherwise, sort by rank (descending)
+                return rankB - rankA;
+            }
+        });
+
         const userContestCounts = new Map();
         for (const contest of userContests) {
             const key = `${contest.userId}_${contest.contestId}`;
@@ -673,12 +777,15 @@ export const getUserContests = async (req, res, next) => {
             contest.joinCount = userContestCounts.get(key);
         }
 
-        // Calculate total pages
-        let totalPages = Math.ceil(totalCount / pageSize);
+        // Paginate the result
+        const totalCount = userContests.length;
+        const totalPages = Math.ceil(totalCount / pageSize);
+        const paginatedData = userContests.slice((page - 1) * pageSize, page * pageSize);
 
+        // Send response
         res.status(200).json({
             message: "User Contest",
-            data: userContests,
+            data: paginatedData,
             page: page,
             limit: pageSize,
             totalCount: totalCount,

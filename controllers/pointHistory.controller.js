@@ -35,8 +35,6 @@ export const getPointHistoryCount = async (req, res) => {
     }
 };
 
-
-
 export const getPointHistory = async (req, res, next) => {
     try {
         let limit = 0;
@@ -132,18 +130,37 @@ export const getPointHistory = async (req, res, next) => {
 export const getPointHistoryMobile = async (req, res, next) => {
     try {
         let query = {};
+        let options = {
+            limit: parseInt(req.query.limit) || 10, // Default limit to 10 documents per page
+            page: parseInt(req.query.page) || 1, // Default page number to 1
+        };
 
         if (req.query.userId) {
             query.userId = req.query.userId;
         }
 
-        let pointHistoryArr = await pointHistory.find(query).sort({ createdAt: -1 }).lean().exec();
+        let totalDocuments = await pointHistory.countDocuments(query);
+        let totalPages = Math.ceil(totalDocuments / options.limit);
+        let skip = (options.page - 1) * options.limit;
 
-        res.status(200).json({ message: "List of points history", data: pointHistoryArr, success: true });
+        let pointHistoryArr = await pointHistory.find(query).sort({ createdAt: -1 }).skip(skip).limit(options.limit).lean().exec();
+
+        res.status(200).json({
+            message: "List of points history",
+            data: pointHistoryArr,
+            pagination: {
+                totalDocuments,
+                totalPages,
+                currentPage: options.page,
+                perPage: options.limit,
+            },
+            success: true,
+        });
     } catch (err) {
         next(err);
     }
 };
+
 // export const getPointHistoryMobile = async (req, res, next) => {
 //     try {
 //         let limit = 10;

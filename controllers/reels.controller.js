@@ -94,7 +94,64 @@ export const getReelsPaginated2 = async (req, res, next) => {
         next(err);
     }
 };
+
 export const getReelsPaginated = async (req, res, next) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        // Pagination parameters
+        let page = parseInt(req.query.page) || 1;
+        let pageSize = parseInt(req.query.pageSize) || 10;
+
+        // Count total reels
+        let totalCount = await Reels.countDocuments();
+        if (totalCount === 0) {
+            return res.status(404).json({ message: "No reels found", success: false });
+        }
+
+        // Calculate total pages
+        let totalPages = Math.ceil(totalCount / pageSize);
+
+        // Retrieve reels for the current page with random ordering
+        let reelsArr = await Reels.aggregate([
+            { $sample: { size: pageSize } }, // Randomly select documents
+            { $sort: { _id: 1 } }, // Sort by _id to maintain consistency for pagination
+        ])
+            .skip((page - 1) * pageSize)
+            .limit(pageSize)
+            .exec();
+
+        // Fetch liked status for each reel and create a new array with modified structure
+        const reelsWithLikedStatus = await Promise.all(
+            reelsArr.map(async (reel) => {
+                const likedStatus = await ReelLikes.findOne({
+                    userId: req.user.userId,
+                    reelId: reel._id,
+                });
+
+                return {
+                    ...reel,
+                    likedByCurrentUser: likedStatus !== null, // Will be true or false
+                };
+            })
+        );
+
+        // Log the activity
+        await ActivityLog.create({
+            userId: req.user.userId,
+            type: "Watching Reels",
+        });
+
+        res.status(200).json({ message: "Reels Found", data: reelsWithLikedStatus, totalPages: totalPages, success: true });
+    } catch (err) {
+        console.error(err);
+        next(err);
+    }
+};
+
+export const getReelsPaginated1 = async (req, res, next) => {
     try {
         if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });
@@ -146,98 +203,6 @@ export const getReelsPaginated = async (req, res, next) => {
         next(err);
     }
 };
-
-// export const getReelsPaginated = async (req, res, next) => {
-//     try {
-//         if (!req.user) {
-//             return res.status(401).json({ message: "Unauthorized" });
-//         }
-
-//         let totalCount = await Reels.countDocuments();
-
-//         if (totalCount === 0) {
-//             return res.status(404).json({ message: "No reels found", success: false });
-//         }
-
-//         let reelsArr = await Reels.aggregate([
-//             {
-//                 $sample: {
-//                     size: totalCount,
-//                 },
-//             },
-//         ]);
-//         if (!reelsArr || reelsArr.length === 0) {
-//             return res.status(500).json({ message: "Error retrieving reels", success: false });
-//         }
-//         await ActivityLog.create({
-//             userId: req.user.userId,
-//             type: "Watching Reels",
-//         });
-//         res.status(200).json({ message: "Reels Found", data: reelsArr, success: true });
-//     } catch (err) {
-//         console.error(err);
-//         next(err);
-//     }
-// };
-
-// export const getReelsPaginated = async (req, res, next) => {
-//     try {
-//         let totalCount = await Reels.countDocuments();
-//         let page = 0;
-//         page = Math.floor(Math.random() * (totalCount - 0 + 1) + 0);
-
-//         if (!req.query || !req.query.limit || !req.query.page) {
-//             throw new Error("invalid route");
-//         }
-//         console.log(req.query.limit);
-//         let reelsArr = await Reels.aggregate([
-//             {
-//                 $sample: {
-//                     size: parseInt(req.query.limit),
-//                 },
-//             },
-//         ]);
-//         console.log(reelsArr, reelsArr.length, "reelsArr.length", "reels arr");
-//         res.status(200).json({ message: "Reels Found", data: reelsArr, success: true });
-//     } catch (err) {
-//         next(err);
-//     }
-// };
-
-// export const getReelsPaginated = async (req, res, next) => {
-//     try {
-//         if (!req.user) {
-//             return res.status(401).json({ message: "Unauthorized" });
-//         }
-
-//         await ActivityLog.create({
-//             userId: req.user.userId,
-//             type: "Watching Reels",
-//         });
-
-//         const likedReelIds = await ReelLikes.find({ userId: req.user.userId }).distinct("reelId");
-
-//         Reels.find({ _id: { $nin: likedReelIds } }, (err, results) => {
-//             if (err) {
-//                 return res.status(500).json({ message: "Error finding reels", success: false });
-//             } else {
-//                 if (results.length === 0) {
-//                     return res.status(404).json({ message: "No matching reels found", success: false });
-//                 }
-
-//                 // Shuffle the results array randomly using Fisher-Yates algorithm
-//                 for (let i = results.length - 1; i > 0; i--) {
-//                     const j = Math.floor(Math.random() * (i + 1));
-//                     [results[i], results[j]] = [results[j], results[i]];
-//                 }
-
-//                 res.status(200).json({ message: "Reels Found", data: results, success: true });
-//             }
-//         });
-//     } catch (err) {
-//         next(err);
-//     }
-// };
 
 export const updateById = async (req, res, next) => {
     try {

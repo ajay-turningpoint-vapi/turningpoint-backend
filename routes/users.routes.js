@@ -26,6 +26,7 @@ import {
     testupdate,
     getPointHistoryByUserId,
     updateUserOnlineStatus,
+    getUserContestsReport,
 } from "../controllers/users.controller";
 import { authorizeJwt } from "../middlewares/auth.middleware";
 import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
@@ -50,6 +51,7 @@ router.get("/getUsers", getUsers);
 router.get("/getContractors", getContractors);
 router.get("/getUserById/:id", authorizeJwt, getUserById);
 router.get("/getUserContests", getUserContests);
+router.get("/getUserContestsReport", getUserContestsReport);
 router.delete("/deleteById/:id", deleteUser);
 // router.post("/monitor-location", gpsData);
 router.patch("/monitor-location", authorizeJwt, location);
