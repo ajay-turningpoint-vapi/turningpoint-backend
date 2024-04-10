@@ -9,6 +9,7 @@ import UserContest from "../models/userContest";
 import Contest from "../models/contest.model";
 import pointHistoryModel from "../models/pointHistory.model";
 import admin from "../helpers/firebase";
+import { MongoServerError } from "mongodb";
 import { createPointlogs } from "./pointHistory.controller";
 import { sendNotification, sendNotificationMessage, sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
 import Geofence from "../models/geoFence.modal";
@@ -345,6 +346,9 @@ export const updateUserProfile = async (req, res, next) => {
         userObj = await Users.findByIdAndUpdate(req.user.userId, req.body).exec();
         res.status(200).json({ message: "Profile Updated Successfully", data: userObj, success: true });
     } catch (err) {
+        if (err instanceof MongoServerError && err.code === 11000) {
+            return res.status(400).json({ message: "Email Already Exists", success: false });
+        }
         next(err);
     }
 };
@@ -615,84 +619,196 @@ export const getActiveCustomer = async (req, res, next) => {
     }
 };
 
+export const getUserContestsReportLose = async (req, res, next) => {
+    try {
+        const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided
+        const limit = parseInt(req.query.limit) || 10; // Default to limit 10 if not provided
+
+        // Your aggregation pipeline code
+        const pipeline = [
+            {
+                $match: {
+                    status: "lose",
+                    rank: "0",
+                }, // Filter documents where status is "lose" and rank is 0
+            },
+            {
+                $group: {
+                    _id: "$userId", // Group by userId
+                    userObj: { $first: "$userObj" }, // Get the userObj details
+                    contestObj: { $first: "$contestObj" }, // Get the contestObj details
+                    joinCount: { $sum: 1 }, // Count the number of documents for each userId
+                },
+            },
+            {
+                $addFields: {
+                    userIdObject: { $toObjectId: "$_id" }, // Convert _id to ObjectId
+                   contestIdObject: { $toObjectId: "$contestId" }, 
+                },
+            },
+            {
+                $lookup: {
+                    from: "users", // Users collection
+                    localField: "userIdObject",
+                    foreignField: "_id",
+                    as: "userObj",
+                },
+            },
+            {
+                $lookup: {
+                    from: "contests", // Contests collection
+                    localField: "contestIdObject",
+                    foreignField: "_id",
+                    as: "contestObj",
+                },
+            },
+            {
+                $addFields: {
+                    userObj: { $arrayElemAt: ["$userObj", 0] }, // Extract the first element of userObj array
+                    contestObj: { $arrayElemAt: ["$contestObj", 0] }, // Extract the first element of contestObj array
+                },
+            },
+            {
+                $project: {
+                    userObj: 1, // Include userObj field
+                    contestObj: 1, // Include contestObj field
+                    joinCount: 1, // Include joinCount field
+                    rank: "0", // Include rank field
+                    status: "lose", // Include status field
+                },
+            },
+            {
+                $sort: { "userObj.name": 1 }, // Sort by userObj.name in ascending order
+            },
+            {
+                $skip: (page - 1) * limit, // Skip documents for pagination
+            },
+            {
+                $limit: limit, // Limit the number of documents for pagination
+            },
+        ];
+
+        // Execute the aggregation pipeline to get the result data
+        const result = await UserContest.aggregate(pipeline);
+
+        // Execute another aggregation pipeline to count the distinct userIds
+        const distinctCountPipeline = [
+            {
+                $match: {
+                    status: "lose",
+                    rank: "0",
+                },
+            },
+            {
+                $group: {
+                    _id: "$userId", // Group by userId
+                },
+            },
+            {
+                $count: "total", // Count the distinct userIds
+            },
+        ];
+
+        // Execute the distinct count pipeline
+        const [{ total }] = await UserContest.aggregate(distinctCountPipeline);
+
+        // Calculate total number of pages
+        const totalPage = Math.ceil(total / limit);
+
+        // Respond with the fetched data including page information
+        res.status(200).json({ data: result, page, totalPage });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+
 export const getUserContestsReport = async (req, res, next) => {
     try {
-        let page = parseInt(req.query.page) || 1;
-        let pageSize = parseInt(req.query.pageSize) || 10;
-        let searchQuery = {};
-        if (req.query.q === "winners") {
-            searchQuery.status = "win";
-            console.log("Search Query:", searchQuery);
-            const distinctWinners = await UserContest.aggregate([{ $match: searchQuery }, { $group: { _id: "$userId" } }]);
-            console.log(distinctWinners);
+        const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided
+        const limit = parseInt(req.query.limit) || 10; // Default to limit 10 if not provided
+
+        // Define match condition based on the search query
+        const matchCondition = req.query.q === "winners" ? { status: "win" } : {};
+
+        // Your aggregation pipeline code
+        const pipeline = [
+            {
+                $addFields: {
+                    userIdObject: { $toObjectId: "$userId" },
+                    contestIdObject: { $toObjectId: "$contestId" },
+                },
+            },
+            {
+                $lookup: {
+                    from: "users", // Users collection
+                    localField: "userIdObject",
+                    foreignField: "_id",
+                    as: "userObj",
+                },
+            },
+            {
+                $lookup: {
+                    from: "contests", // Contests collection
+                    localField: "contestIdObject",
+                    foreignField: "_id",
+                    as: "contestObj",
+                },
+            },
+            {
+                $addFields: {
+                    userObj: { $arrayElemAt: ["$userObj", 0] }, // Extract the first element of userObj array
+                    contestObj: { $arrayElemAt: ["$contestObj", 0] }, // Extract the first element of contestObj array
+                },
+            },
+            {
+                $match: matchCondition, // Conditionally match based on search query
+            },
+            {
+                $project: {
+                    userIdObject: 0, // Exclude userIdObject field from output
+                    contestIdObject: 0, // Exclude contestIdObject field from output
+                },
+            },
+            {
+                $sort: { "userObj.name": 1 }, // Sort by userObj.name in ascending order
+            },
+        ];
+
+        // Execute the aggregation pipeline
+        const [result, totalCount] = await Promise.all([
+            UserContest.aggregate(pipeline)
+                .skip((page - 1) * limit)
+                .limit(limit),
+            UserContest.countDocuments(matchCondition), // Count documents based on match condition
+        ]);
+
+        // Calculate total number of pages
+        const totalPage = Math.ceil(totalCount / limit);
+
+        // Respond with the fetched data including page information
+        res.status(200).json({ data: result, page, totalPage });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const getUserContestsJoinCount = async (req, res, next) => {
+    try {
+        // Aggregate to get distinct users
+        const distinctUserContests = await UserContest.aggregate([{ $group: { _id: "$userId" } }]);
+        let totalJoinCount = 0;
+        // Iterate through the distinct user contests and calculate total join count
+        for (const userContest of distinctUserContests) {
+            const userJoinCount = await UserContest.countDocuments({ userId: userContest._id });
+            totalJoinCount += userJoinCount;
         }
-        if (req.query.q === "losers") {
-            searchQuery.status = "lose";
-            searchQuery.rank = "0"; // Ensure rank is 0
-            console.log("Search Query:", searchQuery);
 
-            const distinctLosers = await UserContest.aggregate([{ $match: searchQuery }, { $group: { _id: "$userId" } }]);
-            console.log(distinctLosers.length);
-        }
-
-        // Calculate totalJoinCount before pagination
-        let totalJoinCount = await UserContest.countDocuments(searchQuery);
-        let userContests = await UserContest.find(searchQuery)
-            .sort({ createdAt: -1 })
-            .skip((page - 1) * pageSize)
-            .limit(pageSize)
-            .lean()
-            .exec();
-        await Promise.all(
-            userContests.map(async (contest) => {
-                if (contest.userId) {
-                    contest.userObj = await Users.findById(contest.userId).exec();
-                }
-                if (contest.contestId) {
-                    contest.contestObj = await Contest.findById(contest.contestId).exec();
-                }
-            })
-        );
-        const groupedUserContests = userContests.reduce((acc, curr) => {
-            const userName = curr.userObj ? curr.userObj.name : "";
-            acc[userName] = [...(acc[userName] || []), curr];
-            return acc;
-        }, {});
-        userContests = Object.values(groupedUserContests).flat();
-
-        userContests.sort((a, b) => {
-            const rankA = parseInt(a.rank);
-            const rankB = parseInt(b.rank);
-            if (rankA === 0 && rankB !== 0) {
-                return 1;
-            } else if (rankA !== 0 && rankB === 0) {
-                return -1;
-            } else {
-                return rankB - rankA;
-            }
-        });
-
-        const userContestCounts = new Map();
-        for (const contest of userContests) {
-            const key = `${contest.userId}_${contest.contestId}`;
-            userContestCounts.set(key, (userContestCounts.get(key) || 0) + 1);
-        }
-
-        for (const contest of userContests) {
-            const key = `${contest.userId}_${contest.contestId}`;
-            contest.joinCount = userContestCounts.get(key);
-        }
-
-        let totalCount = await UserContest.countDocuments(searchQuery);
-        let totalPages = Math.ceil(totalCount / pageSize);
         res.status(200).json({
-            message: "User Contest",
-            data: userContests,
-            page: page,
-            limit: pageSize,
-            totalCount: totalCount,
-            totalPages: totalPages,
-            totalJoinCount: totalJoinCount, // Return totalJoinCount
+            message: "Total Join Count",
+            totalJoinCount: totalJoinCount,
             success: true,
         });
     } catch (error) {
@@ -700,7 +816,6 @@ export const getUserContestsReport = async (req, res, next) => {
         next(error);
     }
 };
-
 
 export const getUserContests = async (req, res, next) => {
     try {

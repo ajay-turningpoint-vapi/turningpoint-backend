@@ -103,7 +103,7 @@ export const getReelsPaginated = async (req, res, next) => {
 
         // Pagination parameters
         let page = parseInt(req.query.page) || 1;
-        let pageSize = parseInt(req.query.pageSize) || 10;
+        let pageSize = 10; // Limit of 10 reels per page
 
         // Count total reels
         let totalCount = await Reels.countDocuments();
@@ -114,14 +114,14 @@ export const getReelsPaginated = async (req, res, next) => {
         // Calculate total pages
         let totalPages = Math.ceil(totalCount / pageSize);
 
-        // Retrieve reels for the current page with random ordering
+        // Calculate random offset for the current page
+        let randomOffset = Math.floor(Math.random() * totalCount);
+
+        // Retrieve reels for the current page with random sampling
         let reelsArr = await Reels.aggregate([
-            { $sample: { size: pageSize } }, // Randomly select documents
-            { $sort: { _id: 1 } }, // Sort by _id to maintain consistency for pagination
-        ])
-            .skip((page - 1) * pageSize)
-            .limit(pageSize)
-            .exec();
+            { $skip: randomOffset }, // Skip random offset
+            { $limit: pageSize }, // Limit to pageSize
+        ]).exec();
 
         // Fetch liked status for each reel and create a new array with modified structure
         const reelsWithLikedStatus = await Promise.all(
@@ -132,7 +132,7 @@ export const getReelsPaginated = async (req, res, next) => {
                 });
 
                 return {
-                    ...reel,
+                    ...reel, // No need for toObject() as reel is already a plain JavaScript object
                     likedByCurrentUser: likedStatus !== null, // Will be true or false
                 };
             })
@@ -150,6 +150,8 @@ export const getReelsPaginated = async (req, res, next) => {
         next(err);
     }
 };
+
+
 
 export const getReelsPaginated1 = async (req, res, next) => {
     try {
