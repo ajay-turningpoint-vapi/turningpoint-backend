@@ -9,6 +9,7 @@ import UserContest from "../models/userContest";
 import Contest from "../models/contest.model";
 import pointHistoryModel from "../models/pointHistory.model";
 import admin from "../helpers/firebase";
+import ReelLikes from "../models/reelLikes.model";
 import { MongoServerError } from "mongodb";
 import { createPointlogs } from "./pointHistory.controller";
 import { sendNotification, sendNotificationMessage, sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
@@ -382,12 +383,14 @@ export const updateUserStatus = async (req, res, next) => {
         next();
 
         if (status === false) {
-            const title = "User Active Status Updated";
-            const body = `You profile has been disabled by the admin`;
+            const title = "🛑 Attention: Profile Disabled by Admin";
+            const body = `Uh-oh! It appears that your profile has been temporarily disabled by the admin. 🚫 We understand that this may come as a surprise, but rest assured, we're here to help! Please reach out to our support team for assistance and clarification on why your profile was disabled. We're committed to resolving any issues and ensuring that you have the best experience possible. Thank you for your understanding and cooperation.`;
+
             await sendNotificationMessage(userId, title, body);
         } else {
-            const title = "User Active Status Updated";
-            const body = `You profile has been approved by the admin `;
+            const title = "🌟 Congratulations! Your Profile is Approved!";
+            const body = `🎉 Great news! Your profile has been approved by the admin! 🚀 Welcome aboard! You're now part of our vibrant community, where exciting opportunities await you. 🌈 Explore, connect, and make the most of your experience with us! Thank you for joining us on this journey. Let's create amazing moments together! ✨`;
+
             await sendNotificationMessage(userId, title, body);
         }
     } catch (err) {
@@ -407,14 +410,16 @@ export const updateUserKycStatus = async (req, res, next) => {
         res.status(201).json({ message: "User KYC Status Updated Successfully", success: true });
         next();
         if (kycStatus === "approved") {
-            const title = "KYC Status Approved";
-            const body = `Your KYC has been approved. Enjoy lucky draws & rewards!`;
+            const title = "🎉 Congratulations! Your KYC is Approved!";
+            const body = `👏 Hooray! We're excited to announce that your KYC (Know Your Customer) verification has been successfully approved! 🎉 Get ready to unlock a world of exciting opportunities, including exclusive lucky draws, amazing rewards, and much more! 🌟 Thank you for being part of our community, and enjoy the incredible benefits that await you! 🥳`;
             await sendNotificationMessage(userId, title, body);
+            next();
         }
         if (kycStatus === "rejected") {
-            const title = "KYC Status Rejected";
-            const body = `Your KYC submission has been rejected. Please review and resubmit.`;
+            const title = "🚫 KYC Submission Rejected";
+            const body = `Uh-oh! It seems there was an issue with your KYC submission, and it has been rejected. 😔 Don't worry though! Our team is here to help. Please take a moment to review your submission and make any necessary updates. Once you're ready, feel free to resubmit, and we'll do our best to assist you every step of the way! 🛠️ Thank you for your understanding and cooperation.`;
             await sendNotificationMessage(userId, title, body);
+            next();
         }
     } catch (err) {
         console.error(err);
@@ -434,6 +439,43 @@ export const updateUserOnlineStatus = async (req, res) => {
     } catch (error) {
         console.error("Error updating user activity", error);
         res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getUsersAnalytics = async (req, res, next) => {
+    try {
+        // Aggregate the createdAt dates based on month
+        const userGroups = await Users.aggregate([
+            {
+                $match: {
+                    role: { $ne: "ADMIN" }, // Exclude users with role ADMIN
+                    name: { $ne: "Contractor" }, // Exclude users with name Contractor
+                },
+            },
+            {
+                $group: {
+                    _id: { $month: "$createdAt" }, // Group by month
+                    count: { $sum: 1 }, // Count the number of users in each group
+                },
+            },
+            {
+                $sort: { _id: 1 }, // Sort the results by month
+            },
+        ]);
+
+        // Create an array to hold the counts of users for each month
+        const userCounts = Array.from({ length: 12 }, () => [0]);
+
+        // Populate the counts array with the count values from the aggregation result
+        userGroups.forEach((group) => {
+            const monthIndex = group._id - 1; // Adjust for zero-based indexing
+            userCounts[monthIndex] = [group.count];
+        });
+
+        res.status(200).json({ message: "Counts of users grouped by month (excluding ADMINs and Contractors)", data: userCounts, success: true });
+    } catch (error) {
+        console.error(error);
+        next(error);
     }
 };
 
@@ -479,43 +521,72 @@ export const getContractors = async (req, res, next) => {
     }
 };
 
-// export const getContractors = async (req, res, next) => {
-//     try {
-//         console.log(req.query);
-//         const UsersPipeline = UserList(req.query);
-//         UsersPipeline.push({
-//             $match: {
-//                 role: rolesObj.CONTRACTOR,
-//             },
-//         });
-//         let UsersArr = await Users.aggregate(UsersPipeline);
-//         const namesAndShopNames = UsersArr.map((user) => ({ name: user.name, businessName: user.businessName }));
+export const getUserActivityAnalysis = async (req, res, next) => {
+    try {
+        const { startDate, endDate } = req.query;
 
-//         res.status(200).json({ message: "Contractors", data: namesAndShopNames, success: true });
-//     } catch (error) {
-//         console.error(error);
-//         next(error);
-//     }
-// };
+        // Parse start and end dates with default values
+        const startDateParsed = startDate ? new Date(startDate) : new Date(0); // Default to Unix epoch start date if not provided
+        const endDateParsed = endDate ? new Date(endDate) : new Date(); // Default to current date if not provided
+        // Validate date range
+        if (startDateParsed > endDateParsed) {
+            return res.status(400).json({ success: false, message: "Start date cannot be greater than end date" });
+        }
 
-// export const getContractors = async (req, res, next) => {
-//     try {
-//         console.log(req.query);
-//         const UsersPipeline = UserList(req.query);
-//         UsersPipeline.push({
-//             $match: {
-//                 role: rolesObj.CONTRACTOR,
-//             }
-//         });
-//         let UsersArr = await Users.aggregate(UsersPipeline);
-//         console.log(UsersArr);
+        // Find users with specified criteria and projection
+        const users = await Users.find(
+            {
+                name: { $ne: "Contractor" },
+                role: { $ne: "ADMIN" },
+                createdAt: { $gte: startDateParsed, $lte: endDateParsed },
+            },
+            { name: 1, phone: 1, role: 1, isOnline: 1, email: 1, createdAt: 1, fcmToken: 1 }
+        );
 
-//         res.status(200).json({ message: "Contractors", data: UsersArr, success: true });
-//     } catch (error) {
-//         console.error(error);
-//         next(error);
-//     }
-// };
+        // Get the user IDs
+        const userIds = users.map((user) => user._id.toString());
+
+        // Aggregate query to count reels liked by each user
+        const reelsLikeCounts = await ReelLikes.aggregate([{ $match: { userId: { $in: userIds } } }, { $group: { _id: "$userId", count: { $sum: 1 } } }]);
+
+        // Aggregate query to count contest joins and wins by each user
+        const contestCounts = await UserContest.aggregate([
+            { $match: { userId: { $in: userIds } } },
+            {
+                $group: {
+                    _id: "$userId",
+                    joinCount: { $sum: 1 },
+                    winCount: { $sum: { $cond: { if: { $eq: ["$status", "win"] }, then: 1, else: 0 } } },
+                },
+            },
+        ]);
+
+        // Create maps to store the counts of reels liked, contest joins, and contest wins for each user
+        const reelsLikeCountMap = new Map(reelsLikeCounts.map((count) => [count._id.toString(), count.count]));
+        const contestJoinCountMap = new Map(contestCounts.map((count) => [count._id.toString(), count.joinCount]));
+        const contestWinCountMap = new Map(contestCounts.map((count) => [count._id.toString(), count.winCount]));
+
+        // Format the response with the counts of reels liked, contest joins, and contest wins for each user
+        const formattedUsers = users.map((user) => ({
+            _id: user._id,
+            phone: user.phone,
+            name: user.name,
+            role: user.role,
+            email: user.email,
+            isOnline: user.isOnline,
+            createdAt: user.createdAt,
+            fcmToken: user.fcmToken,
+            reelsLikeCount: reelsLikeCountMap.get(user._id.toString()) || 0,
+            contestJoinCount: contestJoinCountMap.get(user._id.toString()) || 0,
+            contestWinCount: contestWinCountMap.get(user._id.toString()) || 0,
+        }));
+
+        res.status(200).json({ success: true, data: formattedUsers });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: "Failed to fetch users or get counts for the users" });
+    }
+};
 
 export const getUserById = async (req, res, next) => {
     try {
@@ -621,20 +692,24 @@ export const getActiveCustomer = async (req, res, next) => {
 
 export const getUserContestsReportLose = async (req, res, next) => {
     try {
+        if (!req.query.contestId) {
+            return res.status(400).json({ message: "contestId query parameter is required" });
+        }
         const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided
         const limit = parseInt(req.query.limit) || 10; // Default to limit 10 if not provided
-
+        const contestId = req.query.contestId;
         // Your aggregation pipeline code
         const pipeline = [
             {
                 $match: {
                     status: "lose",
                     rank: "0",
-                }, // Filter documents where status is "lose" and rank is 0
+                    contestId: contestId,
+                },
             },
             {
                 $group: {
-                    _id: "$userId", // Group by userId
+                    _id: { userId: "$userId", contestId: "$contestId" }, // Group by userId and contestId
                     userObj: { $first: "$userObj" }, // Get the userObj details
                     contestObj: { $first: "$contestObj" }, // Get the contestObj details
                     joinCount: { $sum: 1 }, // Count the number of documents for each userId
@@ -642,8 +717,8 @@ export const getUserContestsReportLose = async (req, res, next) => {
             },
             {
                 $addFields: {
-                    userIdObject: { $toObjectId: "$_id" }, // Convert _id to ObjectId
-                   contestIdObject: { $toObjectId: "$contestId" }, 
+                    userIdObject: { $toObjectId: "$_id.userId" }, // Convert userId to ObjectId
+                    contestIdObject: { $toObjectId: "$_id.contestId" }, // Convert contestId to ObjectId
                 },
             },
             {
@@ -723,15 +798,19 @@ export const getUserContestsReportLose = async (req, res, next) => {
     }
 };
 
-
 export const getUserContestsReport = async (req, res, next) => {
     try {
+        if (!req.query.contestId) {
+            return res.status(400).json({ message: "constestId query parameter is required" });
+        }
         const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided
         const limit = parseInt(req.query.limit) || 10; // Default to limit 10 if not provided
-
+        const contestId = req.query.contestId;
         // Define match condition based on the search query
-        const matchCondition = req.query.q === "winners" ? { status: "win" } : {};
-
+        const matchCondition = {
+            ...(req.query.q === "winners" ? { status: "win" } : {}),
+            contestId: contestId,
+        };
         // Your aggregation pipeline code
         const pipeline = [
             {
@@ -915,10 +994,14 @@ export const getUserContests = async (req, res, next) => {
 
 export const testupdate = async (req, res) => {
     try {
-        // Find documents with rank 0
-        const filter = { rank: "0" }; // Assuming rank is stored as a string, adjust as needed
-        // Update all documents with rank 0
-        const result = await UserContest.updateMany(filter, { rank: "0", kycStatus: "join" }); // Assuming you want to update the status to 'win'
+        // Update operation
+        const update = { $set: { rank: "0", status: "join" } };
+
+        // Update options
+        const options = { multi: true };
+
+        // Perform the update for all documents
+        const result = await UserContest.updateMany({}, update, options);
 
         res.json({ message: "Update successful", result });
     } catch (error) {

@@ -2,6 +2,7 @@ import { storeFileAndReturnNameBase64 } from "../helpers/fileSystem";
 import Reels from "../models/reels.model";
 import ReelLikes from "../models/reelLikes.model";
 import ActivityLog from "../models/activityLogs.model";
+const AWS = require("aws-sdk");
 
 export const addReels = async (req, res, next) => {
     try {
@@ -53,6 +54,37 @@ export const getReels = async (req, res, next) => {
     }
 };
 
+export const getReelsAnalytics = async (req, res, next) => {
+    try {
+        // Aggregate the createdAt dates based on month
+        const reelGroups = await Reels.aggregate([
+            {
+                $group: {
+                    _id: { $month: "$createdAt" }, // Group by month
+                    count: { $sum: 1 }, // Count the number of reels in each group
+                },
+            },
+            {
+                $sort: { _id: 1 }, // Sort the results by month
+            },
+        ]);
+
+        // Create an array to hold the counts of reels for each month
+        const reelCounts = Array.from({ length: 12 }, () => [0]);
+
+        // Populate the counts array with the count values from the aggregation result
+        reelGroups.forEach((group) => {
+            const monthIndex = group._id - 1; // Adjust for zero-based indexing
+            reelCounts[monthIndex] = [group.count];
+        });
+
+        res.status(200).json({ message: "Reels Upload Summary", data: reelCounts, success: true });
+    } catch (error) {
+        console.error(error);
+        next(error);
+    }
+};
+
 export const getReelsPaginated2 = async (req, res, next) => {
     try {
         if (!req.user) {
@@ -97,86 +129,36 @@ export const getReelsPaginated2 = async (req, res, next) => {
 
 export const getReelsPaginated = async (req, res, next) => {
     try {
+        // Authorization check
         if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });
         }
 
-        // Pagination parameters
-        let page = parseInt(req.query.page) || 1;
-        let pageSize = 10; // Limit of 10 reels per page
+        // Parse limit and page parameters or set default values
+        const limit = parseInt(req.query.limit) || 10;
+        const page = parseInt(req.query.page);
+
+        // Check if page is missing or not a number
+        if (!Number.isInteger(page) || page <= 0) {
+            return res.status(400).json({ message: "Invalid URL: Page parameter is missing or invalid", success: false });
+        }
 
         // Count total reels
-        let totalCount = await Reels.countDocuments();
+        const totalCount = await Reels.countDocuments();
+
+        // Check if no reels found
         if (totalCount === 0) {
             return res.status(404).json({ message: "No reels found", success: false });
         }
-
-        // Calculate total pages
-        let totalPages = Math.ceil(totalCount / pageSize);
 
         // Calculate random offset for the current page
-        let randomOffset = Math.floor(Math.random() * totalCount);
+        const randomOffset = Math.floor(Math.random() * totalCount);
 
-        // Retrieve reels for the current page with random sampling
-        let reelsArr = await Reels.aggregate([
+        // Retrieve reels with random sampling and default limit
+        const reelsArr = await Reels.aggregate([
             { $skip: randomOffset }, // Skip random offset
-            { $limit: pageSize }, // Limit to pageSize
-        ]).exec();
-
-        // Fetch liked status for each reel and create a new array with modified structure
-        const reelsWithLikedStatus = await Promise.all(
-            reelsArr.map(async (reel) => {
-                const likedStatus = await ReelLikes.findOne({
-                    userId: req.user.userId,
-                    reelId: reel._id,
-                });
-
-                return {
-                    ...reel, // No need for toObject() as reel is already a plain JavaScript object
-                    likedByCurrentUser: likedStatus !== null, // Will be true or false
-                };
-            })
-        );
-
-        // Log the activity
-        await ActivityLog.create({
-            userId: req.user.userId,
-            type: "Watching Reels",
-        });
-
-        res.status(200).json({ message: "Reels Found", data: reelsWithLikedStatus, totalPages: totalPages, success: true });
-    } catch (err) {
-        console.error(err);
-        next(err);
-    }
-};
-
-
-
-export const getReelsPaginated1 = async (req, res, next) => {
-    try {
-        if (!req.user) {
-            return res.status(401).json({ message: "Unauthorized" });
-        }
-
-        // Pagination parameters
-        let page = parseInt(req.query.page) || 1;
-        let pageSize = parseInt(req.query.pageSize) || 10;
-
-        // Count total reels
-        let totalCount = await Reels.countDocuments();
-        if (totalCount === 0) {
-            return res.status(404).json({ message: "No reels found", success: false });
-        }
-
-        // Calculate total pages
-        let totalPages = Math.ceil(totalCount / pageSize);
-
-        // Generate a random offset for pagination
-        let randomOffset = Math.floor(Math.random() * (totalCount - pageSize));
-
-        // Retrieve reels for the current page with random offset
-        let reelsArr = await Reels.find().skip(randomOffset).limit(pageSize).lean().exec();
+            { $limit: limit }, // Limit to the default or provided limit
+        ]);
 
         // Fetch liked status for each reel and create a new array with modified structure
         const reelsWithLikedStatus = await Promise.all(
@@ -188,7 +170,7 @@ export const getReelsPaginated1 = async (req, res, next) => {
 
                 return {
                     ...reel,
-                    likedByCurrentUser: likedStatus !== null, // Will be true or false
+                    likedByCurrentUser: likedStatus !== null,
                 };
             })
         );
@@ -199,13 +181,36 @@ export const getReelsPaginated1 = async (req, res, next) => {
             type: "Watching Reels",
         });
 
-        res.status(200).json({ message: "Reels Found", data: reelsWithLikedStatus, totalPages: totalPages, success: true });
+        res.status(200).json({ message: "Reels Found", data: reelsWithLikedStatus, success: true });
     } catch (err) {
-        console.error(err);
         next(err);
     }
 };
 
+export const getReelsPaginated1 = async (req, res, next) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        let totalCount = await Reels.countDocuments();
+        let page = 0;
+        page = Math.floor(Math.random() * (totalCount - 0 + 1) + 0);
+
+        if (!req.query || !req.query.limit || !req.query.page) {
+            throw new Error("invalid route");
+        }
+        let reelsArr = await Reels.aggregate([
+            {
+                $sample: {
+                    size: parseInt(req.query.limit),
+                },
+            },
+        ]);
+        res.status(200).json({ message: "Reels Found", data: reelsArr, success: true });
+    } catch (err) {
+        next(err);
+    }
+};
 export const updateById = async (req, res, next) => {
     try {
         let reelsObj = await Reels.findById(req.params.id).exec();
@@ -225,14 +230,30 @@ export const updateById = async (req, res, next) => {
     }
 };
 
+// Assuming you have configured AWS SDK with your credentials
+
 export const deleteById = async (req, res, next) => {
     try {
-        let reelsObj = await Reels.findById(req.params.id).exec();
-        if (!reelsObj) {
+        // Retrieve the reel object from MongoDB
+        let reelObj = await Reels.findById(req.params.id).exec();
+        if (!reelObj) {
             throw new Error("Could not find reel");
         }
+        // Extract the video link from the reel object
+        // const videoLink = reelObj.fileUrl;
+        // // Delete the video file from S3
+        // const s3 = new AWS.S3();
+        // const s3Params = {
+        //     Bucket: process.env.AWS_S3_BUCKET_NAME,
+        //     Key: videoLink.substring(videoLink.lastIndexOf("/") + 1), // Provide the key of the video file in S3
+        // };
+        // await s3.deleteObject(s3Params).promise();
+
+        // After successfully deleting from S3, delete the MongoDB document
         await Reels.findByIdAndDelete(req.params.id).exec();
-        res.status(200).json({ message: "Reel Deleted Successfully", success: true });
+
+        // Send response
+        res.status(200).json({ message: "Reel and associated video deleted successfully", success: true });
     } catch (err) {
         next(err);
     }

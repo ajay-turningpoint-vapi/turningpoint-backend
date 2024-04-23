@@ -2,9 +2,9 @@ import Contest from "../models/contest.model";
 import userContest from "../models/userContest";
 import userModel from "../models/user.model";
 import Prize from "../models/prize.model";
-import { sendNotificationLuckyDraw, sendNotificationMessage } from "../middlewares/fcm.middleware";
+import { sendNotificationMessage } from "../middlewares/fcm.middleware";
 
-export const checkContest = async (date, time) => {
+export const checkContest1 = async (date, time) => {
     try {
         let dateToBeComparedStart = new Date(date);
         dateToBeComparedStart.setHours(0, 0, 0);
@@ -83,7 +83,7 @@ export const checkContest = async (date, time) => {
         console.error(error);
     }
 };
-export const checkContest1 = async (date, time) => {
+export const checkContest = async (date, time) => {
     try {
         let dateToBeComparedStart = new Date(date);
         dateToBeComparedStart.setHours(0, 0, 0);
@@ -145,8 +145,23 @@ export const checkContest1 = async (date, time) => {
                 // Close the contest
                 await Contest.findByIdAndUpdate(updatedContest._id, { status: "CLOSED" }).exec();
 
-                for (const user of contestUsers) {
-                    await sendNotificationLuckyDraw(user._id);
+                const userData = await userModel
+                    .find({
+                        $and: [
+                            { role: { $ne: "ADMIN" } }, // Exclude users with role 'admin'
+                            { name: { $ne: "Contractor" } }, // Exclude users with name 'rohit'
+                        ],
+                    })
+                    .lean()
+                    .exec();
+                for (const user of userData) {
+                    try {
+                        const title = "🎉 Get Ready for the Lucky Draw!";
+                        const body = `🍀 Feeling lucky? The moment of truth is near! In just 5 minutes, we'll be announcing the winners of our exciting lucky draw. 🏆 Don't miss out on your chance to win fabulous prizes! Stay tuned and keep those fingers crossed! 🤞✨`;
+                        await sendNotificationMessage(user._id, title, body);
+                    } catch {
+                        console.error("Error sending notification for user:", user._id, error);
+                    }
                 }
             } catch (err) {
                 console.error(err);

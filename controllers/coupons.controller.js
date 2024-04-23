@@ -127,6 +127,36 @@ export const getAllCoupons = async (req, res, next) => {
         next(error);
     }
 };
+export const getAllCouponsAnalytics = async (req, res, next) => {
+    try {
+        let couponsArr = await Coupon.find({}).lean().exec();
+
+        let totalValue = 0; // Initialize total value for all coupons
+        let totalCouponUsedValue = 0; // Initialize total value for coupons with maximumNoOfUsersAllowed = 0
+        let totalCouponUnusedValue = 0; // Initialize total value for coupons with maximumNoOfUsersAllowed = 1
+
+        for (const coupon of couponsArr) {
+            totalValue += coupon.value; // Add the value of each coupon to the total
+
+            if (coupon.maximumNoOfUsersAllowed === 0) {
+                totalCouponUsedValue += coupon.value; // Add the value of each coupon with maximumNoOfUsersAllowed = 0 to the total
+            } else if (coupon.maximumNoOfUsersAllowed === 1) {
+                totalCouponUnusedValue += coupon.value; // Add the value of each coupon with maximumNoOfUsersAllowed = 1 to the total
+            }
+        }
+
+        const data = [totalValue, totalCouponUsedValue, totalCouponUnusedValue];
+
+        res.status(200).json({
+            message: "Coupons Summary",
+            data: data, // Return the array containing the total values
+            success: true,
+        });
+    } catch (error) {
+        console.error(error);
+        next(error);
+    }
+};
 
 export const updateCouponsById = async (req, res, next) => {
     try {
@@ -193,7 +223,7 @@ export const getActiveCoupons = async (req, res, next) => {
         next(error);
     }
 };
-export const getActiveCouponsQrZip = async (req, res, next) => {
+export const getActiveCouponsExcel = async (req, res, next) => {
     try {
         let todayStart = new Date();
         todayStart.setHours(0, 0, 0);
@@ -246,7 +276,7 @@ export const getActiveCouponsQrZip = async (req, res, next) => {
         next(error);
     }
 };
-export const getActiveCouponsQrZip1 = async (req, res, next) => {
+export const getActiveCouponsQrZip = async (req, res, next) => {
     try {
         let todayStart = new Date();
         todayStart.setHours(0, 0, 0);

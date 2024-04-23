@@ -16,7 +16,7 @@ import {
     getPreviousContestRewards,
     joinContestByCoupon,
     getContestCoupons,
-    test,
+    getAllContest,
 } from "../controllers/contest.controller";
 let router = express.Router();
 import { authorizeJwt } from "../middlewares/auth.middleware";
@@ -24,7 +24,7 @@ import { authorizeJwt } from "../middlewares/auth.middleware";
 router.post("/addContest", addContest);
 
 router.get("/getContestById/:id", getContestById);
-router.get("/test", test);
+router.get("/getAllContest", getAllContest);
 router.get("/getContest", authorizeJwt, getContest);
 router.get("/getContestCoupons", authorizeJwt, getContestCoupons);
 router.get("/getContestAdmin", authorizeJwt, getContestAdmin);

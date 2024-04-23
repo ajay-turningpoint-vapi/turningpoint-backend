@@ -29,18 +29,25 @@ import newContractorRouter from "./routes/newContractor.routes";
 import activityLogsRouter from "./routes/activityLogs.routes";
 import { format } from "date-fns";
 const schedule = require("node-schedule");
-
+const { exec } = require("child_process");
 //routes
 import usersRouter from "./routes/users.routes";
 import wishlist from "./routes/wishlist.routes";
 import { checkContest } from "./Services/ContestCron";
-
 import fileRouter from "./routes/fileRouter.routes";
 import activityLogsModel from "./models/activityLogs.model";
+import userModel from "./models/user.model";
+import { sendNotificationMessage } from "./middlewares/fcm.middleware";
 
+const fs = require("fs");
 const app = express();
-
 app.use(cors());
+const dumpFolder = path.join(__dirname, "dump");
+console.log(dumpFolder);
+if (!fs.existsSync(dumpFolder)) {
+    fs.mkdirSync(dumpFolder);
+    console.log("Dump folder created");
+}
 mongoose.connect(CONFIG.MONGOURI, { useNewUrlParser: true, useUnifiedTopology: true }, (err) => {
     if (err) {
         console.log(err);
@@ -77,14 +84,25 @@ app.use("/map", geofenceRouter);
 app.use("/logs", activityLogsRouter);
 app.use("/newContractor", newContractorRouter);
 app.use("/", fileRouter);
-// const job = schedule.scheduleJob("*/1 * * * *", function () {
-//     let date = format(new Date(), "yyyy-MM-dd");
-//     let time = format(new Date(), "HH-mm");
-//     console.log("RUNNING", date, time);
-//     checkContest(date, time);
-// });
 
-
+app.get("/backup", async (req, res) => {
+    try {
+        // Perform backup operation using mongodump
+        exec(`mongodump --db TurningPoint --out ${dumpFolder}`, (error, stdout, stderr) => {
+            if (error) {
+                console.error("Backup error:", error);
+                return res.status(500).json({ error: "Backup failed" });
+            }
+            console.log("Backup successful");
+            console.log(stdout);
+            console.error(stderr);
+            res.json({ message: "Backup successful" });
+        });
+    } catch (error) {
+        console.error("Backup error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
 const job = schedule.scheduleJob("*/1 * * * *", async function () {
     try {
         // Get the current date and time
@@ -101,15 +119,63 @@ const job = schedule.scheduleJob("*/1 * * * *", async function () {
         console.error("Error in scheduling job:", error);
     }
 });
-const retentionPeriod = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
-const thresholdDate = new Date(Date.now() - retentionPeriod);
-activityLogsModel.deleteMany({ createdAt: { $lt: thresholdDate } }, (err, result) => {
-    if (err) {
-        console.error("Error deleting activity logs:", err);
-    } else {
+const activityLogsDeleteJob = schedule.scheduleJob("0 0 */2 * *", async () => {
+    try {
+        const retentionPeriod = 14 * 24 * 60 * 60 * 1000; // 14 days in milliseconds
+        const thresholdDate = new Date(Date.now() - retentionPeriod);
+        const result = await activityLogsModel.deleteMany({ createdAt: { $lt: thresholdDate } });
         console.log(`Deleted ${result.deletedCount} activity logs older than ${thresholdDate}`);
+    } catch (error) {
+        console.error("Error deleting activity logs:", error);
     }
 });
+
+const findInactiveUserJob = schedule.scheduleJob("0 0 * * 6", async () => {
+    console.log("Running task to check inactive users and send notifications...");
+    try {
+        // Calculate the timestamp for one week ago
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+        // Find activity logs within the last week
+        const recentActivityLogs = (
+            await activityLogsModel
+                .find({
+                    timestamp: { $gte: oneWeekAgo },
+                })
+                .distinct("userId")
+        ).map((userId) => userId.toString());
+
+        // Find all user IDs
+        const allUserIds = await userModel.find({}, "_id");
+
+        // Extract user IDs from user objects
+        const allUserIdsArray = allUserIds.map((user) => user._id.toString());
+
+        // Find users who have no activity logs within the last week
+        const inactiveUserIds = allUserIdsArray.filter((userId) => !recentActivityLogs.includes(userId));
+
+        // Find user objects for inactive user IDs
+        const inactiveUsers = await userModel.find({ _id: { $in: inactiveUserIds } });
+
+        // Send notifications to inactive users
+        await Promise.all(
+            inactiveUsers.map(async (user) => {
+                try {
+                    const title = "We Miss You! Come Back and Win!";
+                    const body = `Hey there! We've noticed that you haven't been using our app lately. Don't miss out on all the amazing offers, exciting events like lucky draws, and much more! Come back now to enjoy everything we have to offer. We can't wait to see you again!`;
+                    // await sendNotificationMessage(user._id, title, body);
+                    console.log("Notification sent for user:", user?.name);
+                } catch (error) {
+                    console.error("Error sending notification for user:", user._id, error);
+                }
+            })
+        );
+    } catch (error) {
+        console.error("Error running task:", error);
+    }
+});
+
 app.use(errorHandler);
 
 export default app;

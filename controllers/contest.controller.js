@@ -6,12 +6,10 @@ import userModel from "../models/user.model";
 import { createPointlogs } from "./pointHistory.controller";
 import { pointTransactionType } from "./../helpers/Constants";
 import activityLogsModel from "../models/activityLogs.model";
+import { sendNotificationMessage } from "../middlewares/fcm.middleware";
 let Contestintial = "TNPC";
 export const addContest = async (req, res, next) => {
     try {
-        // if (req.body.image) {
-        //     req.body.image = await storeFileAndReturnNameBase64(req.body.image);
-        // }
         let foundUrl = await Contest.findOne({ name: req.body.name }).exec();
         if (foundUrl) throw { status: 400, message: "Contest  already registered" };
         req.body.contestId = Contestintial + Math.floor(Date.now() / 1000) + (Math.random() + 1).toString(36).substring(7);
@@ -20,7 +18,6 @@ export const addContest = async (req, res, next) => {
 
         if (req.body?.prizeArr && req.body?.prizeArr?.length > 0) {
             let rank = 1;
-            console.log("przei loop fdgfdgf");
             for (const prize of req.body?.prizeArr) {
                 let prizeObj = {
                     rank: parseInt(rank),
@@ -39,8 +36,18 @@ export const addContest = async (req, res, next) => {
                 rank++;
             }
         }
-        // console.log(req.body);
-
+        const users = await userModel.find(); // Fetch all users, modify the query as needed
+        await Promise.all(
+            users.map(async (user) => {
+                try {
+                    const title = "🎉 Exciting News: New Contest Available!";
+                    const body = `🏆 Ready for a thrilling challenge? We've just launched a brand new contest! Join now for a chance to win amazing rewards and immerse yourself in an adventure of excitement and fun! 💫 Don't miss out! The more you participate, the higher your chances of grabbing top rewards! Join the contest now and let the journey begin! 🚀`;
+                    await sendNotificationMessage(user._id, title, body);
+                } catch (error) {
+                    console.error("Error sending notification for user:", user._id, error);
+                }
+            })
+        );
         res.status(201).json({ message: "Contest Registered", success: true });
     } catch (err) {
         next(err);
@@ -695,26 +702,40 @@ export const joinContestByCoupon = async (req, res, next) => {
         next(err);
     }
 };
-export const test = async (req, res) => {
+export const getAllContest = async (req, res) => {
     try {
-        // Extract the contestId from the query parameters
-        const contestId = req.query.contestId;
+        // Find all contests
+        const contests = await Contest.find();
 
-        // Ensure contestId is provided
-        if (!contestId) {
-            return res.status(400).json({ error: "Contest ID is required" });
+        // Arrays to store contest names and user counts
+        const contestNames = [];
+        const userCounts = [];
+
+        // Loop through each contest
+        for (const contest of contests) {
+            const contestId = contest._id;
+
+            // Get the distinct list of users who have joined the contest
+            const distinctUsers = await userContest.distinct("userId", { contestId });
+
+            // Count the number of distinct users
+            const userCount = distinctUsers.length;
+
+            // Push contest name and user count to respective arrays
+            contestNames.push(contest.name);
+            userCounts.push(userCount);
         }
 
-        // Aggregate to get the count of each user's occurrences for the specified contestId
-        const userCounts = await userContest.aggregate([{ $match: { contestId: contestId } }, { $group: { _id: "$userId", count: { $sum: 1 }, users: { $push: "$$ROOT" } } }]).exec();
+        // Construct the output object
+        const output = { contestNames, userCounts };
 
-        // Return the aggregated data
-        res.status(200).json(userCounts);
+        res.json(output);
     } catch (error) {
-        console.error("Error fetching user counts for contest:", error);
+        console.error("Error fetching contests with user counts:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
 // export const joinContest = async (req, res, next) => {
 //     try {
 //         let ContestObj = await Contest.findById(req.params.id).exec();

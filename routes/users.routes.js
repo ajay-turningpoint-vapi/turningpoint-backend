@@ -29,6 +29,8 @@ import {
     getUserContestsReport,
     getUserContestsJoinCount,
     getUserContestsReportLose,
+    getUsersAnalytics,
+    getUserActivityAnalysis,
 } from "../controllers/users.controller";
 import { authorizeJwt } from "../middlewares/auth.middleware";
 import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
@@ -50,6 +52,8 @@ router.get("/getAllCaprenterByContractorName", authorizeJwt, getAllCaprenterByCo
 router.get("/getUserStatsReport/:id", getUserStatsReport);
 router.get("/getUserPointHistoryById", getPointHistoryByUserId);
 router.get("/getUsers", getUsers);
+router.get("/getUsersAnalytics", getUsersAnalytics);
+router.get("/getUserActivityAnalysis", authorizeJwt, getUserActivityAnalysis);
 router.get("/getContractors", getContractors);
 router.get("/getUserById/:id", authorizeJwt, getUserById);
 router.get("/getUserContests", getUserContests);

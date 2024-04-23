@@ -71,3 +71,34 @@ export const getLikeCount = async (req, res, next) => {
         next(err);
     }
 };
+
+export const getReelsLikeAnalytics = async (req, res, next) => {
+    try {
+        // Aggregate the createdAt dates based on month
+        const userGroups = await ReelLikes.aggregate([
+            {
+                $group: {
+                    _id: { $month: "$createdAt" }, // Group by month
+                    count: { $sum: 1 }, // Count the number of users in each group
+                },
+            },
+            {
+                $sort: { _id: 1 }, // Sort the results by month
+            },
+        ]);
+
+        // Create an array to hold the counts of users for each month
+        const userCounts = Array.from({ length: 12 }, () => [0]);
+
+        // Populate the counts array with the count values from the aggregation result
+        userGroups.forEach((group) => {
+            const monthIndex = group._id - 1; // Adjust for zero-based indexing
+            userCounts[monthIndex] = [group.count];
+        });
+
+        res.status(200).json({ message: "Reels Like Summary", data: userCounts, success: true });
+    } catch (error) {
+        console.error(error);
+        next(error);
+    }
+};
