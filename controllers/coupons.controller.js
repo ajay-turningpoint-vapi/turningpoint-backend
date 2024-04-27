@@ -15,6 +15,7 @@ import activityLogsModel from "../models/activityLogs.model";
 import QRCode from "qrcode";
 import XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import axios from "axios";
 const nanoid = customAlphabet("1234567890", 10);
 export const addCoupons = async (req, res, next) => {
     try {
@@ -451,6 +452,53 @@ export const addMultipleCoupons = async (req, res, next) => {
 //     }
 // };
 
+// export const applyCoupon = async (req, res, next) => {
+//     try {
+//         let findArr = [];
+
+//         if (mongoose.isValidObjectId(req.params.id)) {
+//             findArr = [{ _id: req.params.id }, { name: req.params.id }];
+//         } else {
+//             findArr = [{ name: req.params.id }];
+//         }
+//         let CouponObj = await Coupon.findOne({ $or: [...findArr] })
+//             .lean()
+//             .exec();
+//         let UserObj = await Users.findById(req.user.userId).lean().exec();
+//         if (!CouponObj) {
+//             return res.status(700).json({ message: "Coupon not found" });
+//         }
+
+//         if (CouponObj.maximumNoOfUsersAllowed !== 1) {
+//             return res.status(700).json({ message: "Coupon has already been applied" });
+//         }
+//         await Coupon.findByIdAndUpdate(CouponObj._id, { maximumNoOfUsersAllowed: 0 }).exec();
+//         let points = CouponObj.value;
+
+//         if (CouponObj.value !== 0) {
+//             let pointDescription = "Coupon Earned " + points + " Points By Scanning QRCode";
+//             let mobileDescription = "Coupon";
+//             await createPointlogs(req.user.userId, points, pointTransactionType.CREDIT, pointDescription, mobileDescription, "success");
+//             let userPoints = {
+//                 points: UserObj.points + parseInt(points),
+//             };
+//             await activityLogsModel.create({
+//                 userId: req.user.userId,
+//                 type: "Scanned Coupon",
+//             });
+
+//             await Users.findByIdAndUpdate(req.user.userId, userPoints).exec();
+
+//             res.status(200).json({ message: "Coupon Applied", success: true, points: CouponObj.value });
+//         } else {
+//             res.status(200).json({ message: "Coupon Applied better luck next time", success: true, points: CouponObj.value });
+//         }
+//     } catch (err) {
+//         console.error(err);
+//         next(err);
+//     }
+// };
+
 export const applyCoupon = async (req, res, next) => {
     try {
         let findArr = [];
@@ -460,21 +508,41 @@ export const applyCoupon = async (req, res, next) => {
         } else {
             findArr = [{ name: req.params.id }];
         }
-        let CouponObj = await Coupon.findOne({ $or: [...findArr] })
-            .lean()
-            .exec();
-        let UserObj = await Users.findById(req.user.userId).lean().exec();
+        let CouponObj = await Coupon.findOne({ $or: [...findArr] }).exec();
+        let UserObj = await Users.findById(req.user.userId).exec();
         if (!CouponObj) {
-            return res.status(700).json({ message: "Coupon not found" });
+            return res.status(404).json({ message: "Coupon not found" });
         }
 
         if (CouponObj.maximumNoOfUsersAllowed !== 1) {
-            return res.status(700).json({ message: "Coupon has already been applied" });
+            return res.status(400).json({ message: "Coupon has already been applied" });
         }
+
+        if (req.body.latitude && req.body.longitude) {
+            // Get the actual address from latitude and longitude
+            const response = await axios.get("https://maps.googleapis.com/maps/api/geocode/json", {
+                params: {
+                    latlng: `${req.body.latitude},${req.body.longitude}`,
+                    key: "AIzaSyB_mx6YLhBCVyk1luPlHDC-z1BKwxkPf3o",
+                },
+            });
+
+            // Extract the address from the response
+            const scanLocation = response.data.results[0].formatted_address;
+            console.log("scanloc", scanLocation, req.body);
+            await Coupon.findByIdAndUpdate(CouponObj._id, {
+                location: {
+                    type: "Point",
+                    coordinates: [req.body.longitude, req.body.latitude],
+                },
+                scanLocation: scanLocation, // Update the scanLocation field with the actual address
+            }).exec();
+        }
+
         await Coupon.findByIdAndUpdate(CouponObj._id, { maximumNoOfUsersAllowed: 0 }).exec();
         let points = CouponObj.value;
 
-        if (CouponObj.value !== 0) {
+        if (points !== 0) {
             let pointDescription = "Coupon Earned " + points + " Points By Scanning QRCode";
             let mobileDescription = "Coupon";
             await createPointlogs(req.user.userId, points, pointTransactionType.CREDIT, pointDescription, mobileDescription, "success");
@@ -488,9 +556,9 @@ export const applyCoupon = async (req, res, next) => {
 
             await Users.findByIdAndUpdate(req.user.userId, userPoints).exec();
 
-            res.status(200).json({ message: "Coupon Applied", success: true, points: CouponObj.value });
+            res.status(200).json({ message: "Coupon Applied", success: true, points });
         } else {
-            res.status(200).json({ message: "Coupon Applied better luck next time", success: true, points: CouponObj.value });
+            res.status(200).json({ message: "Coupon Applied better luck next time", success: true, points });
         }
     } catch (err) {
         console.error(err);

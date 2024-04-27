@@ -196,20 +196,21 @@ export const location = async (req, res) => {
     try {
         const userId = req.user.userId; // Extract user ID from authenticated user
         const user = await Users.findById(userId); // Find user by ID in the database
-
         // Check if user exists
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
-
+        console.log("coordinates", coordinates);
+        user.location.coordinates = coordinates;
+        await user.save();
+        console.log(user);
         // Find all geofences
         const allGeofences = await Geofence.find({});
         for (const geofence of allGeofences) {
             // Calculate distance between user's coordinates and geofence coordinates
             const distance = calculateDistance(coordinates, geofence.location.coordinates);
-            // Check if user is within the geofence radius
-            console.log(geofence.location.coordinates);
             if (distance <= geofence.radius) {
+                console.log(geofence.location);
                 const swappedCoordinates = [geofence.location.coordinates[1], geofence.location.coordinates[0]];
 
                 const usersToNotify = await Users.find({
@@ -219,10 +220,13 @@ export const location = async (req, res) => {
                         },
                     },
                 });
+
+                console.log("inside", usersToNotify);
                 // Send notifications to users within the geofence
 
                 for (const user of usersToNotify) {
-                    await sendNotification(user.fcmToken, geofence.notificationMessage);
+                    const name = "Turning Point";
+                    await sendNotification(user.fcmToken, name, geofence.notificationMessage);
                 }
             } else {
                 console.log("Outside geofence radius");
@@ -431,6 +435,7 @@ export const updateUserOnlineStatus = async (req, res) => {
     try {
         const { userId } = req.user;
         const { isOnline } = req.body;
+        console.log(isOnline);
         const updatedUser = await Users.findByIdAndUpdate(userId, { isOnline }, { new: true });
         if (!updatedUser) {
             return res.status(404).json({ error: "User not found" });
@@ -565,7 +570,16 @@ export const getUserActivityAnalysis = async (req, res, next) => {
         const reelsLikeCountMap = new Map(reelsLikeCounts.map((count) => [count._id.toString(), count.count]));
         const contestJoinCountMap = new Map(contestCounts.map((count) => [count._id.toString(), count.joinCount]));
         const contestWinCountMap = new Map(contestCounts.map((count) => [count._id.toString(), count.winCount]));
+        let totalReelsLikeCount = 0;
+        let totalContestJoinCount = 0;
 
+        for (const count of reelsLikeCounts) {
+            totalReelsLikeCount += count.count;
+        }
+
+        for (const count of contestCounts) {
+            totalContestJoinCount += count.joinCount;
+        }
         // Format the response with the counts of reels liked, contest joins, and contest wins for each user
         const formattedUsers = users.map((user) => ({
             _id: user._id,
@@ -581,7 +595,7 @@ export const getUserActivityAnalysis = async (req, res, next) => {
             contestWinCount: contestWinCountMap.get(user._id.toString()) || 0,
         }));
 
-        res.status(200).json({ success: true, data: formattedUsers });
+        res.status(200).json({ success: true, data: formattedUsers, totalReelsLikeCount, totalContestJoinCount });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: "Failed to fetch users or get counts for the users" });
@@ -1016,7 +1030,7 @@ export const getPointHistoryByUserId = async (req, res) => {
 
         // Check if userId query parameter exists
         if (!req.query.userId) {
-            return res.status(400).json({ error: "userId parameter is required" });
+            return res.status(400).json({ message: "userId parameter is required" });
         }
         query.userId = req.query.userId; // Add userId to the query
 

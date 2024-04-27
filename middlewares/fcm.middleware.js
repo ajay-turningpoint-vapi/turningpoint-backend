@@ -16,19 +16,19 @@ export const sendNotificationLuckyDraw = async (userId, req, res, next) => {
             console.log("Successfully sent notification:", response);
         } else {
             // Handle the case where FCM token is not found
-            res.status(400).json({ error: "FCM token not found for the user" });
+            res.status(400).json({ message: "FCM token not found for the user" });
         }
     } catch (error) {
         console.error("Error sending notification:", error);
         throw new Error("Error sending notification");
     }
 };
-export const sendNotification = async (fcmToken, message) => {
+export const sendNotification = async (fcmToken, name, message) => {
     console.log(fcmToken, message);
     try {
         const payload = {
             notification: {
-                title: "Geofence Alert",
+                title: `Welcome to ${name}: Your Next Destination`,
                 body: message,
             },
         };

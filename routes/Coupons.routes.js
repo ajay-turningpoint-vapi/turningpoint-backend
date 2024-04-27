@@ -27,7 +27,7 @@ router.get("/getActiveCoupons", getActiveCoupons);
 router.get("/getActiveCouponsQrZip", getActiveCouponsQrZip);
 router.get("/getActiveCouponsQrExcel", getActiveCouponsExcel);
 router.post("/addMultipleCoupons", addMultipleCoupons);
-router.get("/applyCoupon/:id", authorizeJwt, applyCoupon);
+router.post("/applyCoupon/:id", authorizeJwt, applyCoupon);
 router.post("/generateCoupon", authorizeJwt, generateCoupon);
 
 export default router;

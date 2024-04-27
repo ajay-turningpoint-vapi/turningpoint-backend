@@ -4,7 +4,8 @@
     "private": true,
     "scripts": {
         "start": "npx babel-node ./bin/www",
-        "dev": "nodemon --exec babel-node ./bin/www --signal SIGINT"
+        "dev": "nodemon --exec babel-node ./bin/www --signal SIGINT",
+        "build": "react-scripts build"
     },
     "dependencies": {
         "@googlemaps/google-maps-services-js": "^3.3.42",
