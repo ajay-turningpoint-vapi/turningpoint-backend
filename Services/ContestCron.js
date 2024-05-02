@@ -154,15 +154,15 @@ export const checkContest = async (date, time) => {
                     })
                     .lean()
                     .exec();
-                for (const user of userData) {
-                    try {
-                        const title = "🎉 Get Ready for the Lucky Draw!";
-                        const body = `🍀 Feeling lucky? The moment of truth is near! In just 5 minutes, we'll be announcing the winners of our exciting lucky draw. 🏆 Don't miss out on your chance to win fabulous prizes! Stay tuned and keep those fingers crossed! 🤞✨`;
-                        await sendNotificationMessage(user._id, title, body);
-                    } catch {
-                        console.error("Error sending notification for user:", user._id, error);
-                    }
-                }
+                // for (const user of userData) {
+                //     try {
+                //         const title = "🎉 Get Ready for the Lucky Draw!";
+                //         const body = `🍀 Feeling lucky? The moment of truth is near! In just 5 minutes, we'll be announcing the winners of our exciting lucky draw. 🏆 Don't miss out on your chance to win fabulous prizes! Stay tuned and keep those fingers crossed! 🤞✨`;
+                //         await sendNotificationMessage(user._id, title, body);
+                //     } catch {
+                //         console.error("Error sending notification for user:", user._id, error);
+                //     }
+                // }
             } catch (err) {
                 console.error(err);
             }

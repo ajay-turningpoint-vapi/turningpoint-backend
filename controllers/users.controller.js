@@ -1,6 +1,6 @@
 import { UserList } from "../Builders/user.builder";
 import { comparePassword, encryptPassword } from "../helpers/Bcrypt";
-import { ErrorMessages, rolesObj } from "../helpers/Constants";
+import { ErrorMessages, pointTransactionType, rolesObj } from "../helpers/Constants";
 import { storeFileAndReturnNameBase64 } from "../helpers/fileSystem";
 import { generateAccessJwt } from "../helpers/Jwt";
 import { ValidateEmail, validNo } from "../helpers/Validators";
@@ -12,6 +12,7 @@ import admin from "../helpers/firebase";
 import ReelLikes from "../models/reelLikes.model";
 import { MongoServerError } from "mongodb";
 import { createPointlogs } from "./pointHistory.controller";
+
 import { sendNotification, sendNotificationMessage, sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
 import Geofence from "../models/geoFence.modal";
 const geolib = require("geolib");
@@ -20,7 +21,7 @@ export const googleLogin = async (req, res) => {
         const { idToken, fcmToken } = req.body;
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         const { uid, name, email, picture } = decodedToken;
-
+        console.log(fcmToken);
         // Find user by matching both uid and phone
         const existingUser = await Users.findOne({ uid: uid });
 
@@ -59,33 +60,44 @@ export const registerUser = async (req, res, next) => {
     try {
         let userExistCheck = await Users.findOne({ $or: [{ phone: req.body.phone }, { email: new RegExp(`^${req.body.email}$`) }] });
         if (userExistCheck) {
-            throw new Error(`${ErrorMessages.EMAIL_EXISTS} or ${ErrorMessages.PHONE_EXISTS}`);
+            throw new Error(`${ErrorMessages.EMAIL_EXISTS}`);
         }
-        if (!validNo.test(req.body.phone)) {
-            throw { status: false, message: `Please fill a valid phone number` };
-        }
-        const { idToken } = req.body;
+        const { idToken, fcmToken } = req.body;
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         const { uid, name, email, picture } = decodedToken;
         const { refCode } = req.body;
+        let referrer, newUser;
         if (refCode) {
-            // Find the user with the provided referral code
-            const referrer = await User.findOne({ refCode });
+            referrer = await Users.findOne({ refCode: refCode });
+            console.log(referrer);
+            if (!referrer) {
+                return res.status(400).json({ message: "Invalid referral code" });
+            }
+            referrer.points += 100;
+            await Promise.all([createPointlogs(referrer._id, 100, pointTransactionType.CREDIT, `Referral bonus 100 points`, "Referral", "success"), referrer.save()]);
+            newUser = await new Users({
+                ...req.body,
+                uid,
+                name,
+                email,
+                image: picture,
+                fcmToken,
+            }).save();
             if (referrer) {
-                // Add referral logic here - increase points for the referrer, etc.
-                referrer.points += 100;
-                await createPointlogs(referrer._id, 100, pointTransactionType.CREDIT, `Accumulate 100 points by inviting others through a referral`, "Referral", "success");
+                referrer.referrals.push(newUser._id);
                 await referrer.save();
             }
+        } else {
+            newUser = await new Users({
+                ...req.body,
+                uid,
+                name,
+                email,
+                image: picture,
+                fcmToken,
+            }).save();
         }
-        console.log("req", req.body);
-        let newUser = await new Users({
-            ...req.body,
-            uid,
-            name,
-            email,
-            image: picture,
-        }).save();
+
         let accessToken = await generateAccessJwt({
             userId: newUser?._id,
             phone: newUser?.phone,
@@ -133,22 +145,6 @@ export const checkPhoneNumber = async (req, res, next) => {
         next(error);
     }
 };
-
-// export const registerUser = async (req, res, next) => {
-//     try {
-//         let UserExistCheck = await Users.findOne({ $or: [{ phone: req.body.phone }, { email: new RegExp(`^${req.body.email}$`) }] });
-//         if (UserExistCheck) throw new Error(`${ErrorMessages.EMAIL_EXISTS} or ${ErrorMessages.PHONE_EXISTS}`);
-//         if (!validNo.test(req.body.phone)) throw { status: false, message: `Please fill a valid phone number` };
-//         let newUser = await new Users(req.body).save();
-//         let accessToken = await generateAccessJwt({
-//             userId: newUser?._id,
-//         });
-//         res.status(200).json({ message: "User Created", data: newUser, token: accessToken, status: true });
-//     } catch (error) {
-//         console.error(error);
-//         next(error);
-//     }
-// };
 
 export const login = async (req, res, next) => {
     try {
@@ -240,16 +236,34 @@ export const location = async (req, res) => {
     }
 };
 
-// const updatedUser = await Users.findByIdAndUpdate(
-//     userId,
-//     {
-//         $set: {
-//             location: { type: "Point", coordinates: coordinates },
-//             $inc: { version: 1 },
-//         },
-//     },
-//     { new: true }
-// );
+export const notListedContractors = async (req, res) => {
+    try {
+        const users = await Users.find(
+            {
+                $and: [
+                    { "contractor.name": { $exists: true } },
+                    { "contractor.phone": { $exists: true } },
+                    { "contractor.name": { $ne: "Contractor" } }, // Exclude documents where contractor.name is "Contractor"
+                ],
+            },
+            { _id: 0, "contractor.name": 1, "contractor.phone": 1 }
+        ).exec();
+
+        if (users && users.length > 0) {
+            // Transform the users array to the desired format
+            const transformedUsers = users.map((user) => ({
+                name: user.contractor.name,
+                phone: user.contractor.phone,
+            }));
+            res.status(200).json(transformedUsers);
+        } else {
+            res.status(404).json({ message: "No contractor found in not listed contractors" });
+        }
+    } catch (error) {
+        console.error("Error:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
 
 export const addGeoFence = async (req, res) => {
     try {
@@ -432,19 +446,19 @@ export const updateUserKycStatus = async (req, res, next) => {
 };
 
 export const updateUserOnlineStatus = async (req, res) => {
-    try {
-        const { userId } = req.user;
-        const { isOnline } = req.body;
-        console.log(isOnline);
-        const updatedUser = await Users.findByIdAndUpdate(userId, { isOnline }, { new: true });
-        if (!updatedUser) {
-            return res.status(404).json({ error: "User not found" });
-        }
-        res.json({ user: updatedUser });
-    } catch (error) {
-        console.error("Error updating user activity", error);
-        res.status(500).json({ error: "Internal server error" });
-    }
+    // try {
+    //     const { userId } = req.user;
+    //     const { isOnline } = req.body;
+    //     console.log(isOnline);
+    //     const updatedUser = await Users.findByIdAndUpdate(userId, { isOnline }, { new: true });
+    //     if (!updatedUser) {
+    //         return res.status(404).json({ error: "User not found" });
+    //     }
+    //     res.json({ user: updatedUser });
+    // } catch (error) {
+    //     console.error("Error updating user activity", error);
+    //     res.status(500).json({ error: "Internal server error" });
+    // }
 };
 
 export const getUsersAnalytics = async (req, res, next) => {

@@ -31,6 +31,7 @@ import {
     getUserContestsReportLose,
     getUsersAnalytics,
     getUserActivityAnalysis,
+    notListedContractors,
 } from "../controllers/users.controller";
 import { authorizeJwt } from "../middlewares/auth.middleware";
 import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
@@ -61,7 +62,7 @@ router.get("/getUserContestsReport", getUserContestsReport);
 router.get("/getUserContestsReportLose", getUserContestsReportLose);
 router.get("/getUserContestsCount", getUserContestsJoinCount);
 router.delete("/deleteById/:id", deleteUser);
-// router.post("/monitor-location", gpsData);
+router.get("/not-listed-contractors", notListedContractors);
 router.patch("/monitor-location", authorizeJwt, location);
 router.post("/addGeofence", addGeoFence);
 router.delete("/deletedGeofence/:id", deletedGeofence);

@@ -52,7 +52,6 @@ let User = mongoose.Schema(
         isOnline: { type: Boolean, default: false },
         selfie: String,
         visitingCard: { type: String },
-        shopImageArr: [{ shopImage: { type: String } }],
         fcmToken: { type: String, required: true },
         refCode: { type: String, unique: true },
         address: {
@@ -72,11 +71,12 @@ let User = mongoose.Schema(
                 type: [Number],
             },
         },
+
         version: {
             type: Number,
             default: 0,
         },
-        referedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     },
 
     { timestamps: true }
