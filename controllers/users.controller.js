@@ -12,9 +12,10 @@ import admin from "../helpers/firebase";
 import ReelLikes from "../models/reelLikes.model";
 import { MongoServerError } from "mongodb";
 import { createPointlogs } from "./pointHistory.controller";
-
+import ReferralRewards from "../models/referralRewards.model";
 import { sendNotification, sendNotificationMessage, sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
 import Geofence from "../models/geoFence.modal";
+import { randomNumberGenerator } from "../helpers/utils";
 const geolib = require("geolib");
 export const googleLogin = async (req, res) => {
     try {
@@ -54,27 +55,23 @@ export const googleLogin = async (req, res) => {
     }
 };
 
-// Registration endpoint
-
 export const registerUser = async (req, res, next) => {
     try {
         let userExistCheck = await Users.findOne({ $or: [{ phone: req.body.phone }, { email: new RegExp(`^${req.body.email}$`) }] });
         if (userExistCheck) {
             throw new Error(`${ErrorMessages.EMAIL_EXISTS}`);
         }
-        const { idToken, fcmToken } = req.body;
+        const { idToken, fcmToken, refCode } = req.body;
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         const { uid, name, email, picture } = decodedToken;
-        const { refCode } = req.body;
         let referrer, newUser;
         if (refCode) {
             referrer = await Users.findOne({ refCode: refCode });
-            console.log(referrer);
+
             if (!referrer) {
                 return res.status(400).json({ message: "Invalid referral code" });
             }
-            referrer.points += 100;
-            await Promise.all([createPointlogs(referrer._id, 100, pointTransactionType.CREDIT, `Referral bonus 100 points`, "Referral", "success"), referrer.save()]);
+
             newUser = await new Users({
                 ...req.body,
                 uid,
@@ -87,6 +84,15 @@ export const registerUser = async (req, res, next) => {
                 referrer.referrals.push(newUser._id);
                 await referrer.save();
             }
+            const rewardValue = randomNumberGenerator();
+            const reward = await ReferralRewards.create({
+                userId: referrer._id,
+                name: "referral_reward",
+                value: rewardValue,
+                maximumNoOfUsersAllowed: 1,
+            });
+            referrer.referralRewards.push(reward._id);
+            await referrer.save();
         } else {
             newUser = await new Users({
                 ...req.body,
@@ -109,6 +115,78 @@ export const registerUser = async (req, res, next) => {
         next(error);
     }
 };
+
+export const applyRewards = async (req, res, next) => {
+    try {
+        let findArr = [];
+
+        if (mongoose.isValidObjectId(req.params.id)) {
+            findArr = [{ _id: req.params.id }, { name: req.params.id }];
+        } else {
+            findArr = [{ name: req.params.id }];
+        }
+        let RewardObj = await ReferralRewards.findOne({ $or: [...findArr] })
+            .lean()
+            .exec();
+        let UserObj = await Users.findById(req.user.userId).lean().exec();
+        if (!RewardObj) {
+            throw new Error("Reward not found");
+        }
+
+        if (RewardObj.maximumNoOfUsersAllowed !== 1) {
+            throw new Error("Reward is already applied");
+        }
+        await Coupon.findByIdAndUpdate(RewardObj._id, { maximumNoOfUsersAllowed: 0 }).exec();
+        let points = RewardObj.value;
+
+        if (RewardObj.value !== 0) {
+            let pointDescription = "Reward Earned " + points + " Points";
+            await createPointlogs(req.user.userId, points, pointTransactionType.CREDIT, pointDescription, "success");
+            let userPoints = {
+                points: UserObj.points + parseInt(points),
+            };
+
+            await Users.findByIdAndUpdate(req.user.userId, userPoints).exec();
+
+            res.status(200).json({ message: "Reward Applied", success: true, points: RewardObj.value });
+        } else {
+            res.status(200).json({ message: "Better luck next time", success: true, points: RewardObj.value });
+        }
+    } catch (err) {
+        console.error(err);
+        next(err);
+    }
+};
+
+export const getUserReferralsReportById = async (req, res, next) => {
+    try {
+        const userId = req.params.id;
+        const user = await Users.findById(userId)
+            .populate("referrals", "name") 
+            .populate("referralRewards");
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        const totalReferrals = user.referrals.length;
+        res.json({
+            user: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                referrals: user.referrals,
+                referralRewards: user.referralRewards,
+                totalReferrals: totalReferrals,
+            },
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Server error" });
+    }
+};
+
 export const userLogOut = async (req, res) => {
     const token = req.headers.authorization.split(" ")[1];
     try {

@@ -3,7 +3,7 @@ import User from "../models/user.model";
 
 const nanoid = customAlphabet("0123456789abcdefghijklmnopqrstuvwxyz", 10);
 
-export const generateUid = async() => {
+export const generateUid = async () => {
     let check = true;
     while (check) {
         let tempUid = nanoid();
@@ -14,4 +14,10 @@ export const generateUid = async() => {
         }
         console.log("GENERATING NEW UID,Current", tempUid);
     }
+};
+
+export const randomNumberGenerator = () => {
+    const values = [100, 200, 300, 400, 500];
+    const randomIndex = Math.floor(Math.random() * values.length);
+    return values[randomIndex];
 };

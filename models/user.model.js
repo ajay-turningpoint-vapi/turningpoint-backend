@@ -44,7 +44,6 @@ let User = mongoose.Schema(
                 isActive: { type: Boolean, default: false },
             },
         ],
-        upiId: String,
         kycStatus: {
             type: String,
             default: "pending",
@@ -77,8 +76,8 @@ let User = mongoose.Schema(
             default: 0,
         },
         referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+        referralRewards: [{ type: mongoose.Schema.Types.ObjectId, ref: "ReferralRewards" }],
     },
-
     { timestamps: true }
 );
 User.index({ location: "2dsphere" });
