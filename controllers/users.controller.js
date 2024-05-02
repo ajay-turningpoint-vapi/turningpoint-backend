@@ -161,15 +161,21 @@ export const applyRewards = async (req, res, next) => {
 export const getUserReferralsReportById = async (req, res, next) => {
     try {
         const userId = req.params.id;
-        const user = await Users.findById(userId)
-            .populate("referrals", "name") 
-            .populate("referralRewards");
+        const user = await Users.findById(userId).populate("referrals", "name").populate("referralRewards");
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
-
         const totalReferrals = user.referrals.length;
+
+        // Calculate total reward points earned considering only rewards where maximumNoOfUsersAllowed is 0
+        let totalRewardPointsEarned = 0;
+        user.referralRewards.forEach((reward) => {
+            if (reward.maximumNoOfUsersAllowed === 0) {
+                totalRewardPointsEarned += reward.value;
+            }
+        });
+
         res.json({
             user: {
                 _id: user._id,
@@ -179,6 +185,7 @@ export const getUserReferralsReportById = async (req, res, next) => {
                 referrals: user.referrals,
                 referralRewards: user.referralRewards,
                 totalReferrals: totalReferrals,
+                totalRewardPointsEarned: totalRewardPointsEarned,
             },
         });
     } catch (error) {
