@@ -34,6 +34,7 @@ import {
     notListedContractors,
     applyRewards,
     getUserReferralsReportById,
+    getUsersReferralsReport,
 } from "../controllers/users.controller";
 import { authorizeJwt } from "../middlewares/auth.middleware";
 import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
@@ -42,8 +43,9 @@ let router = express.Router();
 
 router.post("/google-signIn", googleLogin);
 router.post("/register", registerUser);
-router.get("/applyReward/:id", applyRewards);
+router.get("/applyReward/:id", authorizeJwt, applyRewards);
 router.get("/getUserReferralsReportById/:id", getUserReferralsReportById);
+router.get("/getUserReferralsReports", getUsersReferralsReport);
 router.post("/logout", userLogOut);
 router.post("/login", login);
 router.post("/checkPhoneNumber", checkPhoneNumber);

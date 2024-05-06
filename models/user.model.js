@@ -81,8 +81,15 @@ let User = mongoose.Schema(
     { timestamps: true }
 );
 User.index({ location: "2dsphere" });
-User.pre("save", function (next) {
-    this.refCode = "TP" + nanoid();
+User.pre("save", async function (next) {
+    if (!this.refCode) {
+        let existingUserWithRefCode = await User.findOne({ refCode: { $exists: true } });
+        if (existingUserWithRefCode) {
+            this.refCode = existingUserWithRefCode.refCode;
+        } else {
+            this.refCode = "TP" + nanoid();
+        }
+    }
     next();
 });
 

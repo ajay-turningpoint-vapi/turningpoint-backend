@@ -16,6 +16,7 @@ import ReferralRewards from "../models/referralRewards.model";
 import { sendNotification, sendNotificationMessage, sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
 import Geofence from "../models/geoFence.modal";
 import { randomNumberGenerator } from "../helpers/utils";
+import mongoose from "mongoose";
 const geolib = require("geolib");
 export const googleLogin = async (req, res) => {
     try {
@@ -136,12 +137,12 @@ export const applyRewards = async (req, res, next) => {
         if (RewardObj.maximumNoOfUsersAllowed !== 1) {
             throw new Error("Reward is already applied");
         }
-        await Coupon.findByIdAndUpdate(RewardObj._id, { maximumNoOfUsersAllowed: 0 }).exec();
+        await ReferralRewards.findByIdAndUpdate(RewardObj._id, { maximumNoOfUsersAllowed: 0 }).exec();
         let points = RewardObj.value;
 
         if (RewardObj.value !== 0) {
-            let pointDescription = "Reward Earned " + points + " Points";
-            await createPointlogs(req.user.userId, points, pointTransactionType.CREDIT, pointDescription, "success");
+            let pointDescription = "Referral Reward Bouns " + points + " Points";
+            await createPointlogs(req.user.userId, points, pointTransactionType.CREDIT, pointDescription, "Referral", "success");
             let userPoints = {
                 points: UserObj.points + parseInt(points),
             };
@@ -166,14 +167,13 @@ export const getUserReferralsReportById = async (req, res, next) => {
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
-        const totalReferrals = user.referrals.length;
 
-        // Calculate total reward points earned considering only rewards where maximumNoOfUsersAllowed is 0
+        const totalReferrals = user.referrals.length;
+        const appliedRewards = user.referralRewards.filter((reward) => reward.maximumNoOfUsersAllowed === 0);
+        const pendingRewards = user.referralRewards.filter((reward) => reward.maximumNoOfUsersAllowed === 1);
         let totalRewardPointsEarned = 0;
-        user.referralRewards.forEach((reward) => {
-            if (reward.maximumNoOfUsersAllowed === 0) {
-                totalRewardPointsEarned += reward.value;
-            }
+        appliedRewards.forEach((reward) => {
+            totalRewardPointsEarned += reward.value;
         });
 
         res.json({
@@ -184,10 +184,60 @@ export const getUserReferralsReportById = async (req, res, next) => {
                 phone: user.phone,
                 referrals: user.referrals,
                 referralRewards: user.referralRewards,
+                appliedRewards: appliedRewards,
+                pendingRewards: pendingRewards, // Include pending rewards array in the response
                 totalReferrals: totalReferrals,
                 totalRewardPointsEarned: totalRewardPointsEarned,
             },
         });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Server error" });
+    }
+};
+
+export const getUsersReferralsReport = async (req, res, next) => {
+    try {
+        // Get users who have referral rewards
+        const usersWithRewards = await Users.find({ referralRewards: { $exists: true, $ne: [] } })
+            .populate("referrals", "name")
+            .populate("referralRewards");
+
+        // Initialize an array to store reports for users with rewards
+        const usersReports = [];
+        let grandTotalRewardPointsEarned = 0; // Initialize grand total
+
+        // Iterate over each user with rewards to generate their report
+        for (const user of usersWithRewards) {
+            const totalReferrals = user.referrals.length;
+            const appliedRewards = user.referralRewards.filter((reward) => reward.maximumNoOfUsersAllowed === 0);
+            const pendingRewards = user.referralRewards.filter((reward) => reward.maximumNoOfUsersAllowed === 1);
+            let totalRewardPointsEarned = 0;
+            appliedRewards.forEach((reward) => {
+                totalRewardPointsEarned += reward.value;
+            });
+
+            grandTotalRewardPointsEarned += totalRewardPointsEarned; // Add to grand total
+
+            // Add the report for the current user to the array
+            usersReports.push({
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                referrals: user.referrals,
+                referralRewards: user.referralRewards,
+                appliedRewards: appliedRewards,
+                pendingRewards: pendingRewards,
+                totalReferrals: totalReferrals,
+                referralRewardsTotal: user.referralRewards.length,
+                appliedRewardsTotal: appliedRewards.length,
+                pendingRewardsTotal: pendingRewards.length,
+                totalRewardPointsEarned: totalRewardPointsEarned,
+            });
+        }
+
+        res.json({ usersReports, grandTotalRewardPointsEarned }); // Include grand total in response
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Server error" });
@@ -326,9 +376,9 @@ export const notListedContractors = async (req, res) => {
         const users = await Users.find(
             {
                 $and: [
-                    { "contractor.name": { $exists: true } },
-                    { "contractor.phone": { $exists: true } },
-                    { "contractor.name": { $ne: "Contractor" } }, // Exclude documents where contractor.name is "Contractor"
+                    { "contractor.phone": { $exists: true, $ne: null } }, // Ensure contractor.phone exists
+                    { "contractor.name": { $ne: "Contractor" } },
+                    { phone: { $ne: "$contractor.phone" } }, // Exclude documents where phone is equal to contractor.phone
                 ],
             },
             { _id: 0, "contractor.name": 1, "contractor.phone": 1 }
@@ -1160,6 +1210,10 @@ export const getPointHistoryByUserId = async (req, res) => {
             query.status = { $nin: ["reject", "pending"] };
         }
 
+        if (req.query.s && req.query.s === "Referral") {
+            (query.type = "CREDIT"), (query.description = { $regex: "Referral Reward", $options: "i" });
+        }
+
         // Pagination parameters
         let page = parseInt(req.query.page) || 1;
         let pageSize = parseInt(req.query.pageSize) || 10;
@@ -1265,10 +1319,30 @@ export const getUserStatsReport = async (req, res, next) => {
             },
         ];
 
+        const totalPointsReferralPipeline = [
+            {
+                $match: {
+                    userId: userId,
+                    type: "CREDIT",
+                    description: {
+                        $regex: "Referral Reward",
+                        $options: "i",
+                    },
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalAmount: { $sum: "$amount" },
+                },
+            },
+        ];
+
         const userAllTransactions = await pointHistoryModel.aggregate(allTransactions).exec();
         const likingReel = await pointHistoryModel.aggregate(likingReelpipeline).exec();
         const total = await pointHistoryModel.aggregate(totalPointsRedeemedInContestPipeline).exec();
         const totalCoupoun = await pointHistoryModel.aggregate(totalPointsCouponPipeline).exec();
+        const totalReferral = await pointHistoryModel.aggregate(totalPointsReferralPipeline).exec();
         const user = await Users.findById(userId).exec();
 
         if (!user) {
@@ -1282,6 +1356,7 @@ export const getUserStatsReport = async (req, res, next) => {
             points: user.points,
             totalPointsRedeemed: totalDebit.length > 0 ? totalDebit[0].totalAmount : 0,
             totalPointsRedeemedForProducts: totalCoupoun.length > 0 ? totalCoupoun[0].totalAmount : 0,
+            totalPointsEarnedFormReferrals: totalReferral.length > 0 ? totalReferral[0].totalAmount : 0,
             totalPointsRedeemedForLiking: likingReel.length > 0 ? likingReel[0].totalAmount : 0,
             totalPointsRedeemedInContest: total.length > 0 ? total[0].totalAmount : 0,
             userAllTransactions: userAllTransactions,
