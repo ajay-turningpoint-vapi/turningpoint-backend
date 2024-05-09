@@ -21,3 +21,14 @@ export const randomNumberGenerator = () => {
     const randomIndex = Math.floor(Math.random() * values.length);
     return values[randomIndex];
 };
+
+export const generateRandomWord = (length) => {
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let randomWord = "TP" + "";
+    for (let i = 0; i < length; i++) {
+        randomWord += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return randomWord;
+};
+
+

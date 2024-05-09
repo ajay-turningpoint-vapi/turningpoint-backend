@@ -15,7 +15,7 @@ import { createPointlogs } from "./pointHistory.controller";
 import ReferralRewards from "../models/referralRewards.model";
 import { sendNotification, sendNotificationMessage, sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
 import Geofence from "../models/geoFence.modal";
-import { randomNumberGenerator } from "../helpers/utils";
+import { generateRandomWord, randomNumberGenerator } from "../helpers/utils";
 import mongoose from "mongoose";
 const geolib = require("geolib");
 export const googleLogin = async (req, res) => {
@@ -23,7 +23,6 @@ export const googleLogin = async (req, res) => {
         const { idToken, fcmToken } = req.body;
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         const { uid, name, email, picture } = decodedToken;
-        console.log(fcmToken);
         // Find user by matching both uid and phone
         const existingUser = await Users.findOne({ uid: uid });
 
@@ -58,33 +57,60 @@ export const googleLogin = async (req, res) => {
 
 export const registerUser = async (req, res, next) => {
     try {
-        let userExistCheck = await Users.findOne({ $or: [{ phone: req.body.phone }, { email: new RegExp(`^${req.body.email}$`) }] });
+        const { phone, role, idToken, fcmToken, refCode } = req.body;
+        console.log(req.body);
+
+        const userExistCheck = await Users.findOne({ $or: [{ phone }, { email: new RegExp(`^${req.body.email}$`, "i") }] });
         if (userExistCheck) {
             throw new Error(`${ErrorMessages.EMAIL_EXISTS}`);
         }
-        const { idToken, fcmToken, refCode } = req.body;
+
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         const { uid, name, email, picture } = decodedToken;
+        console.log(email, req.body);
         let referrer, newUser;
-        if (refCode) {
-            referrer = await Users.findOne({ refCode: refCode });
 
+        if (role === "CONTRACTOR") {
+            const carpenter = await Users.findOne({ "notListedContractor.phone": phone, role: "CARPENTER" });
+            console.log("carpenter", carpenter);
+            if (carpenter) {
+                carpenter.contractor.businessName = req.body.businessName;
+                carpenter.contractor.name = name;
+                carpenter.notListedContractor.phone = "";
+                carpenter.notListedContractor.name = "";
+                await carpenter.save();
+            } else {
+                return res.status(400).json({ message: "No matching carpenter found with provided phone number" });
+            }
+        }
+
+        if (refCode) {
+            referrer = await Users.findOne({ refCode });
             if (!referrer) {
                 return res.status(400).json({ message: "Invalid referral code" });
             }
+        }
 
-            newUser = await new Users({
-                ...req.body,
-                uid,
-                name,
-                email,
-                image: picture,
-                fcmToken,
-            }).save();
-            if (referrer) {
-                referrer.referrals.push(newUser._id);
-                await referrer.save();
-            }
+        const randomWord = generateRandomWord(10);
+        const userData = {
+            ...req.body,
+            refCode: randomWord,
+            uid,
+            name,
+            email,
+            image: picture,
+            fcmToken,
+        };
+
+        if (phone !== null && phone !== "") {
+            userData.notListedContractor = { name: req.body.contractor.name, phone: req.body.contractor.phone };
+            userData.contractor = { name: "Contractor", businessName: "Turning Point" };
+        }
+
+        newUser = await new Users(userData).save();
+        if (referrer) {
+            referrer.referrals.push(newUser._id);
+            await referrer.save();
             const rewardValue = randomNumberGenerator();
             const reward = await ReferralRewards.create({
                 userId: referrer._id,
@@ -94,17 +120,14 @@ export const registerUser = async (req, res, next) => {
             });
             referrer.referralRewards.push(reward._id);
             await referrer.save();
-        } else {
-            newUser = await new Users({
-                ...req.body,
-                uid,
-                name,
-                email,
-                image: picture,
-                fcmToken,
-            }).save();
+            try {
+                const title = "🎉 You've Won a Scratch Card! Claim Your Reward Now!";
+                const body = `🏆 Congratulations! You've unlocked a special reward with your referral! 🎁 Scratch and reveal your prize now for a chance to win exciting rewards! 💰 Keep the winning streak going and share the joy with more referrals! The more you refer, the more rewards you earn! Don't wait, claim your prize and spread the excitement! 🚀`;
+                await sendNotificationMessage(referrer._id, title, body);
+            } catch (error) {
+                console.error("Error sending notification for user:", referrer._id, error);
+            }
         }
-
         let accessToken = await generateAccessJwt({
             userId: newUser?._id,
             phone: newUser?.phone,
@@ -375,20 +398,16 @@ export const notListedContractors = async (req, res) => {
     try {
         const users = await Users.find(
             {
-                $and: [
-                    { "contractor.phone": { $exists: true, $ne: null } }, // Ensure contractor.phone exists
-                    { "contractor.name": { $ne: "Contractor" } },
-                    { phone: { $ne: "$contractor.phone" } }, // Exclude documents where phone is equal to contractor.phone
-                ],
+                $and: [{ "notListedContractor.phone": { $exists: true, $ne: null } }, { "notListedContractor.name": { $ne: null, $ne: "Contractor" } }, { phone: { $ne: "$notListedContractor.phone" } }],
             },
-            { _id: 0, "contractor.name": 1, "contractor.phone": 1 }
+            { _id: 0, "notListedContractor.name": 1, "notListedContractor.phone": 1, name: 1 }
         ).exec();
 
         if (users && users.length > 0) {
-            // Transform the users array to the desired format
             const transformedUsers = users.map((user) => ({
-                name: user.contractor.name,
-                phone: user.contractor.phone,
+                givenName: user.name,
+                name: user.notListedContractor.name,
+                phone: user.notListedContractor.phone,
             }));
             res.status(200).json(transformedUsers);
         } else {
@@ -1513,26 +1532,34 @@ export const getUserStatsReport = async (req, res, next) => {
 
 export const getAllCaprenterByContractorName = async (req, res) => {
     try {
+        const { businessName, name } = req.user.userObj;
         const contractors = await Users.find({
-            "contractor.businessName": req.user.contractor.businessName,
-            "contractor.name": req.user.contractor.name,
+            role: "CONTRACTOR",
+            name,
+            businessName,
         });
+
         if (contractors.length === 0) {
-            return res.status(404).json({ message: "No contractors found " + contractor.businessName });
+            return res.status(404).json({ message: "No contractors found" });
+        }
+        const contractorNames = contractors.map((contractor) => contractor.name);
+        const contractorBusinessNames = contractors.map((contractor) => contractor.businessName);
+
+        const carpenters = await Users.find({
+            role: "CARPENTER",
+            "contractor.name": { $in: contractorNames },
+            "contractor.businessName": { $in: contractorBusinessNames },
+        });
+        if (carpenters.length === 0) {
+            return res.status(404).json({ message: "No carpenters found" });
         }
 
-        // Process the result to group carpenters under the allCarpenters key
-        const allCarpenters = contractors.map(({ name, points }) => ({ name, points }));
-
-        // Calculate the total points for all carpenters
-        const allCarpentersTotal = allCarpenters.reduce((total, carpenter) => total + carpenter.points, 0);
-
-        // Construct the final result
+        const allCarpentersTotal = carpenters.reduce((total, carpenter) => total + carpenter.points, 0);
         const result = {
-            contractor: {
-                name: contractors[0].contractor.name, // Assuming the name is the same for all contractors
-                businessName: contractors[0].contractor.businessName, // Assuming the businessName is the same for all contractors
-                allCarpenters,
+            data: {
+                name,
+                businessName,
+                allCarpenters: carpenters.map(({ name, image, points }) => ({ name, image, points })),
                 allCarpentersTotal,
             },
         };
@@ -1540,6 +1567,6 @@ export const getAllCaprenterByContractorName = async (req, res) => {
         res.json(result);
     } catch (error) {
         console.error("Error fetching contractors:", error);
-        res.status(500).json({ error: "Internal server error" });
+        res.status(500).json({ message: "Internal server error" });
     }
 };

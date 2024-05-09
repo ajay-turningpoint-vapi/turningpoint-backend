@@ -55,7 +55,7 @@ router.patch("/updateUserKycStatus/:id", updateUserKycStatus);
 router.patch("/updateUserOnlineStatus", authorizeJwt, updateUserOnlineStatus);
 router.patch("/update-profile", authorizeJwt, updateUserProfile);
 router.patch("/update-profile-image", authorizeJwt, updateUserProfileImage);
-router.get("/getAllCaprenterByContractorName", authorizeJwt, getAllCaprenterByContractorName);
+router.get("/getAllCarpentersByContractorName", authorizeJwt, getAllCaprenterByContractorName);
 router.get("/getUserStatsReport/:id", getUserStatsReport);
 router.get("/getUserPointHistoryById", getPointHistoryByUserId);
 router.get("/getUsers", getUsers);

@@ -1,9 +1,7 @@
 import mongoose from "mongoose";
 
 import { rolesObj } from "../helpers/Constants";
-import { customAlphabet } from "nanoid";
 import axios from "axios";
-const nanoid = customAlphabet("1234567890", 10);
 let User = mongoose.Schema(
     {
         uid: { type: String, unique: true, required: true },
@@ -16,11 +14,16 @@ let User = mongoose.Schema(
             businessName: String,
             phone: String,
         },
+        notListedContractor: {
+            name: String,
+            phone: String,
+        },
+
         addressLine: String,
         country: String,
         stateName: String,
         pincode: String,
-        // address: String,
+
         password: { type: String },
         city: { type: String },
         points: { type: Number, default: 100 },
@@ -81,17 +84,6 @@ let User = mongoose.Schema(
     { timestamps: true }
 );
 User.index({ location: "2dsphere" });
-User.pre("save", async function (next) {
-    if (!this.refCode) {
-        let existingUserWithRefCode = await User.findOne({ refCode: { $exists: true } });
-        if (existingUserWithRefCode) {
-            this.refCode = existingUserWithRefCode.refCode;
-        } else {
-            this.refCode = "TP" + nanoid();
-        }
-    }
-    next();
-});
 
 User.pre("save", async function (next) {
     try {

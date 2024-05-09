@@ -129,38 +129,33 @@ export const getReelsPaginated2 = async (req, res, next) => {
 
 export const getReelsPaginated = async (req, res, next) => {
     try {
-        // Authorization check
         if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });
         }
 
-        // Parse limit and page parameters or set default values
         const limit = parseInt(req.query.limit) || 10;
-        const page = parseInt(req.query.page);
+        const page = parseInt(req.query.page) || 1;
 
-        // Check if page is missing or not a number
         if (!Number.isInteger(page) || page <= 0) {
             return res.status(400).json({ message: "Invalid URL: Page parameter is missing or invalid", success: false });
         }
 
-        // Count total reels
+        // Calculate offset based on page number
+        const skip = (page - 1) * limit;
+
         const totalCount = await Reels.countDocuments();
 
-        // Check if no reels found
         if (totalCount === 0) {
             return res.status(404).json({ message: "No reels found", success: false });
         }
 
-        // Calculate random offset for the current page
-        const randomOffset = Math.floor(Math.random() * totalCount);
-
-        // Retrieve reels with random sampling and default limit
+        // Fetch reels excluding the ones already shown on the current page
         const reelsArr = await Reels.aggregate([
-            { $skip: randomOffset }, // Skip random offset
-            { $limit: limit }, // Limit to the default or provided limit
+            { $sample: { size: limit + skip } }, // Fetch more than needed to ensure enough unique reels
+            { $skip: skip }, // Skip the ones for previous pages
+            { $limit: limit }, // Limit to required reels
         ]);
 
-        // Fetch liked status for each reel and create a new array with modified structure
         const reelsWithLikedStatus = await Promise.all(
             reelsArr.map(async (reel) => {
                 const likedStatus = await ReelLikes.findOne({
@@ -186,6 +181,7 @@ export const getReelsPaginated = async (req, res, next) => {
         next(err);
     }
 };
+
 
 export const getReelsPaginated1 = async (req, res, next) => {
     try {
