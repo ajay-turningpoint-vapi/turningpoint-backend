@@ -125,7 +125,7 @@ export const registerUser = async (req, res, next) => {
                 const body = `🏆 Congratulations! You've unlocked a special reward with your referral! 🎁 Scratch and reveal your prize now for a chance to win exciting rewards! 💰 Keep the winning streak going and share the joy with more referrals! The more you refer, the more rewards you earn! Don't wait, claim your prize and spread the excitement! 🚀`;
                 await sendNotificationMessage(referrer._id, title, body);
             } catch (error) {
-                console.error("Error sending notification for user:", referrer._id, error);
+                console.error("Error sending notification for user:", referrer._id);
             }
         }
         let accessToken = await generateAccessJwt({
@@ -133,6 +133,10 @@ export const registerUser = async (req, res, next) => {
             phone: newUser?.phone,
             email: newUser?.email,
         });
+
+        const registrationTitle = "🎉 Congratulations and Welcome to Turning Point!";
+        const registrationBody = `👏 Woohoo, ${name}! You did it! 🌟 Welcome to the Turning Point community! 🚀 Get ready to immerse yourself in a world of excitement and opportunities! Enjoy watching captivating reels, exploring exclusive offers, enrolling in thrilling lucky draw contests, and much more! 💪 We're thrilled to have you on board, and we can't wait to share all the amazing experiences ahead! Let's dive in and make every moment unforgettable! 🌈`;
+        await sendNotificationMessage(newUser._id, registrationTitle, registrationBody);
         res.status(200).json({ message: "User Created", data: newUser, token: accessToken, status: true });
     } catch (error) {
         console.error(error);
@@ -880,6 +884,7 @@ export const getUserContestsReportLose = async (req, res, next) => {
         const page = parseInt(req.query.page) || 1; // Default to page 1 if not provided
         const limit = parseInt(req.query.limit) || 10; // Default to limit 10 if not provided
         const contestId = req.query.contestId;
+
         // Your aggregation pipeline code
         const pipeline = [
             {
@@ -947,13 +952,14 @@ export const getUserContestsReportLose = async (req, res, next) => {
 
         // Execute the aggregation pipeline to get the result data
         const result = await UserContest.aggregate(pipeline);
-
+        console.log(result);
         // Execute another aggregation pipeline to count the distinct userIds
         const distinctCountPipeline = [
             {
                 $match: {
                     status: "lose",
                     rank: "0",
+                    contestId: contestId, // Assuming you're using Mongoose, convert contestId to ObjectId
                 },
             },
             {
@@ -966,8 +972,9 @@ export const getUserContestsReportLose = async (req, res, next) => {
             },
         ];
 
-        // Execute the distinct count pipeline
-        const [{ total }] = await UserContest.aggregate(distinctCountPipeline);
+        const distinctCountResult = await UserContest.aggregate(distinctCountPipeline);
+        // Get the total count from the distinct count result
+        const total = distinctCountResult[0] && distinctCountResult[0].total ? distinctCountResult[0].total : 0;
 
         // Calculate total number of pages
         const totalPage = Math.ceil(total / limit);
@@ -1539,9 +1546,9 @@ export const getAllCaprenterByContractorName = async (req, res) => {
             businessName,
         });
 
-        if (contractors.length === 0) {
-            return res.status(404).json({ message: "No contractors found" });
-        }
+        // if (contractors.length === 0) {
+        //     return res.status(404).json({ message: "No contractors found" });
+        // }
         const contractorNames = contractors.map((contractor) => contractor.name);
         const contractorBusinessNames = contractors.map((contractor) => contractor.businessName);
 
@@ -1550,9 +1557,9 @@ export const getAllCaprenterByContractorName = async (req, res) => {
             "contractor.name": { $in: contractorNames },
             "contractor.businessName": { $in: contractorBusinessNames },
         });
-        if (carpenters.length === 0) {
-            return res.status(404).json({ message: "No carpenters found" });
-        }
+        // if (carpenters.length === 0) {
+        //     return res.status(404).json({ message: "No carpenters found" });
+        // }
 
         const allCarpentersTotal = carpenters.reduce((total, carpenter) => total + carpenter.points, 0);
         const result = {

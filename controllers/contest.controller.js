@@ -36,7 +36,7 @@ export const addContest = async (req, res, next) => {
                 rank++;
             }
         }
-        const users = await userModel.find(); // Fetch all users, modify the query as needed
+        const users = await userModel.find();
         await Promise.all(
             users.map(async (user) => {
                 try {
@@ -44,7 +44,7 @@ export const addContest = async (req, res, next) => {
                     const body = `🏆 Ready for a thrilling challenge? We've just launched a brand new contest! Join now for a chance to win amazing rewards and immerse yourself in an adventure of excitement and fun! 💫 Don't miss out! The more you participate, the higher your chances of grabbing top rewards! Join the contest now and let the journey begin! 🚀`;
                     await sendNotificationMessage(user._id, title, body);
                 } catch (error) {
-                    console.error("Error sending notification for user:", user._id, error);
+                    console.error("Error sending notification for user:", user._id);
                 }
             })
         );
