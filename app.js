@@ -103,22 +103,30 @@ app.get("/backup", async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 });
-const job = schedule.scheduleJob("*/1 * * * *", async function () {
-    try {
-        // Get the current date and time
-        const currentDate = new Date();
-        const fiveMinutesLater = new Date(currentDate.getTime() + 5 * 60 * 1000); // 5 minutes in the future
+// const job = schedule.scheduleJob("*/1 * * * *", async function () {
+//     try {
+//         // Get the current date and time
+//         const currentDate = new Date();
+//         const fiveMinutesLater = new Date(currentDate.getTime() + 5 * 60 * 1000); // 5 minutes in the future
 
-        // Get the date and time in the required format
-        const date = format(fiveMinutesLater, "yyyy-MM-dd");
-        const time = format(fiveMinutesLater, "HH-mm");
+//         // Get the date and time in the required format
+//         const date = format(fiveMinutesLater, "yyyy-MM-dd");
+//         const time = format(fiveMinutesLater, "HH-mm");
 
-        console.log("RUNNING", date, time);
-        await checkContest(date, time);
-    } catch (error) {
-        console.error("Error in scheduling job:", error);
-    }
+//         console.log("RUNNING", date, time);
+//         await checkContest(date, time);
+//     } catch (error) {
+//         console.error("Error in scheduling job:", error);
+//     }
+// });
+
+const job = schedule.scheduleJob("*/30 * * * * *", function () {
+    let date = format(new Date(), "yyyy-MM-dd");
+    let time = format(new Date(), "HH-mm:ss");
+    console.log("RUNNING", date, time);
+    checkContest(date, time);
 });
+
 const activityLogsDeleteJob = schedule.scheduleJob("0 0 */2 * *", async () => {
     try {
         const retentionPeriod = 14 * 24 * 60 * 60 * 1000; // 14 days in milliseconds

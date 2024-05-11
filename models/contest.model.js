@@ -14,6 +14,7 @@ let Contest = mongoose.Schema(
         endDate: Date,
         startTime: String,
         endTime: String,
+        antimationTime: String,
         status: {
             type: String,
             default: generalModelStatuses.APPROVED,

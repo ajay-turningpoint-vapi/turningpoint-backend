@@ -8,14 +8,44 @@ import { pointTransactionType } from "./../helpers/Constants";
 import activityLogsModel from "../models/activityLogs.model";
 import { sendNotificationMessage } from "../middlewares/fcm.middleware";
 let Contestintial = "TNPC";
+
+function subtractSeconds(timeString, secondsToSubtract) {
+    // Split the time string into hours, minutes, and seconds
+    const [hours, minutes, seconds] = timeString.split(":").map(Number);
+
+    // Calculate total seconds
+    let totalSeconds = hours * 3600 + minutes * 60 + seconds;
+
+    // Subtract seconds from total seconds
+    totalSeconds -= secondsToSubtract;
+
+    // Calculate hours, minutes, and remaining seconds
+    const newHours = Math.floor(totalSeconds / 3600);
+    const remainingSeconds = totalSeconds % 3600;
+    const newMinutes = Math.floor(remainingSeconds / 60);
+    const newSeconds = remainingSeconds % 60;
+
+    // Format the new time
+    const formattedHours = String(newHours).padStart(2, "0");
+    const formattedMinutes = String(newMinutes).padStart(2, "0");
+    const formattedSeconds = String(newSeconds).padStart(2, "0");
+
+    return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
+}
+
 export const addContest = async (req, res, next) => {
     try {
         let foundUrl = await Contest.findOne({ name: req.body.name }).exec();
-        if (foundUrl) throw { status: 400, message: "Contest  already registered" };
-        req.body.contestId = Contestintial + Math.floor(Date.now() / 1000) + (Math.random() + 1).toString(36).substring(7);
-        let ContestObj = await Contest(req.body).save();
-        console.log(ContestObj);
+        if (foundUrl) throw { status: 400, message: "Contest already registered" };
 
+        req.body.contestId = Contestintial + Math.floor(Date.now() / 1000) + (Math.random() + 1).toString(36).substring(7);
+        const timeString = req.body.endTime + ":00";
+        const numberOfPrizes = req.body?.prizeArr?.length || 0;
+        const newTime = subtractSeconds(timeString, numberOfPrizes * 30);
+        console.log("endTime", timeString, "newTime", newTime);
+        req.body.antimationTime = newTime;
+
+        let ContestObj = await Contest(req.body).save();
         if (req.body?.prizeArr && req.body?.prizeArr?.length > 0) {
             let rank = 1;
             for (const prize of req.body?.prizeArr) {
@@ -27,32 +57,78 @@ export const addContest = async (req, res, next) => {
                     image: prize.image,
                 };
 
-                console.log(prizeObj, "przei obj ");
+                console.log(prizeObj, "prize obj ");
 
-                // if (prize.image) {
-                //     prizeObj.image = await storeFileAndReturnNameBase64(prize.image);
-                // }
-                let prizsObje = await Prize(prizeObj).save();
+                let prizeInstance = await Prize(prizeObj).save();
                 rank++;
             }
         }
+
+        // Send notifications to users
         const users = await userModel.find();
         await Promise.all(
             users.map(async (user) => {
                 try {
                     const title = "🎉 Exciting News: New Contest Available!";
                     const body = `🏆 Ready for a thrilling challenge? We've just launched a brand new contest! Join now for a chance to win amazing rewards and immerse yourself in an adventure of excitement and fun! 💫 Don't miss out! The more you participate, the higher your chances of grabbing top rewards! Join the contest now and let the journey begin! 🚀`;
-                    await sendNotificationMessage(user._id, title, body);
+                    // await sendNotificationMessage(user._id, title, body);
                 } catch (error) {
                     console.error("Error sending notification for user:", user._id);
                 }
             })
         );
+
         res.status(201).json({ message: "Contest Registered", success: true });
     } catch (err) {
         next(err);
     }
 };
+
+// export const addContest = async (req, res, next) => {
+//     try {
+//         let foundUrl = await Contest.findOne({ name: req.body.name }).exec();
+//         if (foundUrl) throw { status: 400, message: "Contest  already registered" };
+//         req.body.contestId = Contestintial + Math.floor(Date.now() / 1000) + (Math.random() + 1).toString(36).substring(7);
+//         let ContestObj = await Contest(req.body).save();
+//         console.log(ContestObj);
+
+//         if (req.body?.prizeArr && req.body?.prizeArr?.length > 0) {
+//             let rank = 1;
+//             for (const prize of req.body?.prizeArr) {
+//                 let prizeObj = {
+//                     rank: parseInt(rank),
+//                     contestId: ContestObj._id,
+//                     name: prize.name,
+//                     description: prize.description,
+//                     image: prize.image,
+//                 };
+
+//                 console.log(prizeObj, "przei obj ");
+
+//                 // if (prize.image) {
+//                 //     prizeObj.image = await storeFileAndReturnNameBase64(prize.image);
+//                 // }
+//                 let prizsObje = await Prize(prizeObj).save();
+//                 rank++;
+//             }
+//         }
+//         const users = await userModel.find();
+//         await Promise.all(
+//             users.map(async (user) => {
+//                 try {
+//                     const title = "🎉 Exciting News: New Contest Available!";
+//                     const body = `🏆 Ready for a thrilling challenge? We've just launched a brand new contest! Join now for a chance to win amazing rewards and immerse yourself in an adventure of excitement and fun! 💫 Don't miss out! The more you participate, the higher your chances of grabbing top rewards! Join the contest now and let the journey begin! 🚀`;
+//                     // await sendNotificationMessage(user._id, title, body);
+//                 } catch (error) {
+//                     console.error("Error sending notification for user:", user._id);
+//                 }
+//             })
+//         );
+//         res.status(201).json({ message: "Contest Registered", success: true });
+//     } catch (err) {
+//         next(err);
+//     }
+// };
 
 export const getContestById = async (req, res, next) => {
     try {
@@ -70,8 +146,6 @@ export const getContestById = async (req, res, next) => {
 
 export const getCurrentContest = async (req, res, next) => {
     try {
-        console.log(req.query, "query");
-
         let pipeline = [
             {
                 $addFields: {

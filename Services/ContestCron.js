@@ -92,11 +92,11 @@ export const checkContest = async (date, time) => {
 
         // Find contests that are still open and have an "APPROVED" status
         let openContests = await Contest.find({
-            endTime: `${time}`.replace("-", ":"),
+            antimationTime: `${time}`.replace("-", ":"),
             endDate: { $gte: dateToBeComparedStart.getTime(), $lte: dateToBeComparedEnd.getTime() },
             status: "APPROVED",
         }).exec();
-
+        console.log("litst of contest", openContests);
         for (const el of openContests) {
             try {
                 // Atomically update the status of the contest while checking its previous status
@@ -158,9 +158,9 @@ export const checkContest = async (date, time) => {
                     try {
                         const title = "🎉 Get Ready for the Lucky Draw!";
                         const body = `🍀 Feeling lucky? The moment of truth is near! In just 5 minutes, we'll be announcing the winners of our exciting lucky draw. 🏆 Don't miss out on your chance to win fabulous prizes! Stay tuned and keep those fingers crossed! 🤞✨`;
-                        await sendNotificationMessage(user._id, title, body);
+                        // await sendNotificationMessage(user._id, title, body);
                     } catch {
-                        console.error("Error sending notification for user:", user._id);
+                        // console.error("Error sending notification for user:", user._id);
                     }
                 }
             } catch (err) {
