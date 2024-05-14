@@ -91,7 +91,7 @@ export const registerUser = async (req, res, next) => {
             }
         }
 
-        const randomWord = generateRandomWord(10);
+        const randomWord = generateRandomWord(6);
         const userData = {
             ...req.body,
             refCode: randomWord,
