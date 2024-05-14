@@ -157,8 +157,8 @@ export const checkContest = async (date, time) => {
                 for (const user of userData) {
                     try {
                         const title = "🎉 Get Ready for the Lucky Draw!";
-                        const body = `🍀 Feeling lucky? The moment of truth is near! In just 5 minutes, we'll be announcing the winners of our exciting lucky draw. 🏆 Don't miss out on your chance to win fabulous prizes! Stay tuned and keep those fingers crossed! 🤞✨`;
-                        // await sendNotificationMessage(user._id, title, body);
+                        const body = `🍀 Feeling lucky? The moment of truth is near! In just few minutes, we'll be announcing the winners of our exciting lucky draw. 🏆 Don't miss out on your chance to win fabulous prizes! Stay tuned and keep those fingers crossed! 🤞✨`;
+                        await sendNotificationMessage(user._id, title, body);
                     } catch {
                         // console.error("Error sending notification for user:", user._id);
                     }
