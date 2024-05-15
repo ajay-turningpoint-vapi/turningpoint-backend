@@ -96,13 +96,11 @@ export const registerUser = async (req, res, next) => {
             fcmToken,
         };
 
-        if (role === "CARPENTER" && (req.body.contractor.phone !== null && req.body.contractor.phone !== "")) {
-            userData.notListedContractor = { name: req.body.contractor.name, phone: req.body.contractor.phone };
+        if (role === "CARPENTER" && req.body.contractor.phone !== null && req.body.contractor.phone !== "") {
+            userData.notListedContractor = { name: req.body?.contractor?.name, phone: req.body?.contractor?.phone };
             userData.contractor = { name: "Contractor", businessName: businessName || "Turning Point" };
         }
-        
         newUser = await new Users(userData).save();
-
         if (referrer) {
             referrer.referrals.push(newUser._id);
             await referrer.save();
@@ -119,6 +117,7 @@ export const registerUser = async (req, res, next) => {
                 const title = "🎉 You've Won a Scratch Card! Claim Your Reward Now!";
                 const body = `🏆 Congratulations! You've unlocked a special reward with your referral! 🎁 Scratch and reveal your prize now for a chance to win exciting rewards! 💰 Keep the winning streak going and share the joy with more referrals! The more you refer, the more rewards you earn! Don't wait, claim your prize and spread the excitement! 🚀`;
                 await sendNotificationMessage(referrer._id, title, body);
+                
             } catch (error) {
                 console.error("Error sending notification for user:", referrer._id);
             }

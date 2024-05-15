@@ -19,21 +19,21 @@ let User = mongoose.Schema(
             phone: String,
         },
 
-        addressLine: String,
-        country: String,
-        stateName: String,
+        // addressLine: String,
+        // country: String,
+        // stateName: String,
         pincode: String,
 
         password: { type: String },
-        city: { type: String },
+        // city: { type: String },
         points: { type: Number, default: 100 },
         isActive: { type: Boolean, default: false },
         role: {
             type: String,
             default: rolesObj.CARPENTER,
         },
-        panNo: { type: String },
-        aadharNo: { type: Number },
+        // panNo: { type: String },
+        // aadharNo: { type: Number },
         image: String,
         idFrontImage: String,
         idBackImage: String,
@@ -53,7 +53,7 @@ let User = mongoose.Schema(
         },
         isOnline: { type: Boolean, default: false },
         selfie: String,
-        visitingCard: { type: String },
+        // visitingCard: { type: String },
         fcmToken: { type: String, required: true },
         refCode: { type: String, unique: true },
         address: {
@@ -63,7 +63,7 @@ let User = mongoose.Schema(
             },
             coordinates: [Number],
         },
-        actualAddress: { type: String },
+        // actualAddress: { type: String },
         location: {
             type: {
                 type: String,
@@ -74,10 +74,10 @@ let User = mongoose.Schema(
             },
         },
 
-        version: {
-            type: Number,
-            default: 0,
-        },
+        // version: {
+        //     type: Number,
+        //     default: 0,
+        // },
         referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
         referralRewards: [{ type: mongoose.Schema.Types.ObjectId, ref: "ReferralRewards" }],
     },
