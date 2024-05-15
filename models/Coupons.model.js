@@ -11,12 +11,12 @@ let Coupons = mongoose.Schema(
         location: {
             type: {
                 type: String,
-                enum: ["Point"], // Ensures the type is a Point
-                required: true,
+                enum: ["Point"], 
+                // required: true,
             },
             coordinates: {
-                type: [Number], // Array of numbers [longitude, latitude]
-                required: true,
+                type: [Number],
+                // required: true,
             },
         },
         scanLocation: String,

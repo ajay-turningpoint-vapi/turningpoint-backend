@@ -57,32 +57,17 @@ export const googleLogin = async (req, res) => {
 
 export const registerUser = async (req, res, next) => {
     try {
-        const { phone, role, idToken, fcmToken, refCode } = req.body;
-        console.log(req.body);
+        const { phone, role, idToken, fcmToken, refCode, businessName } = req.body;
+        console.log(req.body.refCode);
 
         const userExistCheck = await Users.findOne({ $or: [{ phone }, { email: new RegExp(`^${req.body.email}$`, "i") }] });
         if (userExistCheck) {
             throw new Error(`${ErrorMessages.EMAIL_EXISTS}`);
         }
-
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         const { uid, name, email, picture } = decodedToken;
-        console.log(email, req.body);
-        let referrer, newUser;
 
-        if (role === "CONTRACTOR") {
-            const carpenter = await Users.findOne({ "notListedContractor.phone": phone, role: "CARPENTER" });
-            console.log("carpenter", carpenter);
-            if (carpenter) {
-                carpenter.contractor.businessName = req.body.businessName;
-                carpenter.contractor.name = name;
-                carpenter.notListedContractor.phone = "";
-                carpenter.notListedContractor.name = "";
-                await carpenter.save();
-            } else {
-                return res.status(400).json({ message: "No matching carpenter found with provided phone number" });
-            }
-        }
+        let referrer, newUser;
 
         if (refCode) {
             referrer = await Users.findOne({ refCode });
@@ -91,10 +76,19 @@ export const registerUser = async (req, res, next) => {
             }
         }
 
+        if (role === "CONTRACTOR") {
+            const carpenter = await Users.findOne({ "notListedContractor.phone": phone, role: "CARPENTER" });
+            if (carpenter) {
+                carpenter.contractor.businessName = businessName || "Turning Point";
+                carpenter.contractor.name = name;
+                await carpenter.save();
+            }
+        }
+
         const randomWord = generateRandomWord(6);
         const userData = {
             ...req.body,
-            refCode: randomWord,
+            refCode: role === "CONTRACTOR" ? randomWord : generateRandomWord(6), // Random referral code only for contractors
             uid,
             name,
             email,
@@ -102,12 +96,13 @@ export const registerUser = async (req, res, next) => {
             fcmToken,
         };
 
-        if (phone !== null && phone !== "") {
+        if (role === "CARPENTER" && (req.body.contractor.phone !== null && req.body.contractor.phone !== "")) {
             userData.notListedContractor = { name: req.body.contractor.name, phone: req.body.contractor.phone };
-            userData.contractor = { name: "Contractor", businessName: "Turning Point" };
+            userData.contractor = { name: "Contractor", businessName: businessName || "Turning Point" };
         }
-
+        
         newUser = await new Users(userData).save();
+
         if (referrer) {
             referrer.referrals.push(newUser._id);
             await referrer.save();
@@ -133,9 +128,8 @@ export const registerUser = async (req, res, next) => {
             phone: newUser?.phone,
             email: newUser?.email,
         });
-
         const registrationTitle = "🎉 Congratulations and Welcome to Turning Point!";
-        const registrationBody = `👏 Woohoo, ${name}! You did it! 🌟 Welcome to the Turning Point community! 🚀 Get ready to immerse yourself in a world of excitement and opportunities! Enjoy watching captivating reels, exploring exclusive offers, enrolling in thrilling lucky draw contests, and much more! 💪 We're thrilled to have you on board, and we can't wait to share all the amazing experiences ahead! Let's dive in and make every moment unforgettable! 🌈`;
+        const registrationBody = `👏 Woohoo, ${newUser.name}! You did it! 🌟 Welcome to the Turning Point community! 🚀 Get ready to immerse yourself in a world of excitement and opportunities! Enjoy watching captivating reels, exploring exclusive offers, enrolling in thrilling lucky draw contests, and much more! 💪 We're thrilled to have you on board, and we can't wait to share all the amazing experiences ahead! Let's dive in and make every moment unforgettable! 🌈`;
         await sendNotificationMessage(newUser._id, registrationTitle, registrationBody);
         res.status(200).json({ message: "User Created", data: newUser, token: accessToken, status: true });
     } catch (error) {
