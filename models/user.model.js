@@ -56,23 +56,23 @@ let User = mongoose.Schema(
         // visitingCard: { type: String },
         fcmToken: { type: String, required: true },
         refCode: { type: String, unique: true },
-        address: {
-            type: {
-                type: String,
-                default: "Point",
-            },
-            coordinates: [Number],
-        },
+        // address: {
+        //     type: {
+        //         type: String,
+        //         default: "Point",
+        //     },
+        //     coordinates: [Number],
+        // },
         // actualAddress: { type: String },
-        location: {
-            type: {
-                type: String,
-                enum: ["Point"],
-            },
-            coordinates: {
-                type: [Number],
-            },
-        },
+        // location: {
+        //     type: {
+        //         type: String,
+        //         enum: ["Point"],
+        //     },
+        //     coordinates: {
+        //         type: [Number],
+        //     },
+        // },
 
         // version: {
         //     type: Number,
