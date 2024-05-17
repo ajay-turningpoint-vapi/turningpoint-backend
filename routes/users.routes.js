@@ -35,6 +35,7 @@ import {
     applyRewards,
     getUserReferralsReportById,
     getUsersReferralsReport,
+    checkRefCode,
 } from "../controllers/users.controller";
 import { authorizeJwt } from "../middlewares/auth.middleware";
 import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
@@ -49,6 +50,7 @@ router.get("/getUserReferralsReports", getUsersReferralsReport);
 router.post("/logout", userLogOut);
 router.post("/login", login);
 router.post("/checkPhoneNumber", checkPhoneNumber);
+router.post("/checkRefCode", checkRefCode);
 router.patch("/updateUserStatus/:id", updateUserStatus);
 router.put("/updateStatus", testupdate);
 router.patch("/updateUserKycStatus/:id", updateUserKycStatus);

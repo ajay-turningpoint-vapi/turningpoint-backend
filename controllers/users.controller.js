@@ -69,12 +69,12 @@ export const registerUser = async (req, res, next) => {
 
         let referrer, newUser;
 
-        if (refCode) {
-            referrer = await Users.findOne({ refCode });
-            if (!referrer) {
-                return res.status(400).json({ message: "Invalid referral code" });
-            }
-        }
+        // if (refCode) {
+        //     referrer = await Users.findOne({ refCode });
+        //     if (!referrer) {
+        //         return res.status(400).json({ message: "Invalid referral code" });
+        //     }
+        // }
 
         if (role === "CONTRACTOR") {
             const carpenter = await Users.findOne({ "notListedContractor.phone": phone, role: "CARPENTER" });
@@ -116,8 +116,7 @@ export const registerUser = async (req, res, next) => {
             try {
                 const title = "🎉 You've Won a Scratch Card! Claim Your Reward Now!";
                 const body = `🏆 Congratulations! You've unlocked a special reward with your referral! 🎁 Scratch and reveal your prize now for a chance to win exciting rewards! 💰 Keep the winning streak going and share the joy with more referrals! The more you refer, the more rewards you earn! Don't wait, claim your prize and spread the excitement! 🚀`;
-                await sendNotificationMessage(referrer._id, title, body);
-                
+                await sendNotificationMessage(referrer._id, title, body, "Referral");
             } catch (error) {
                 console.error("Error sending notification for user:", referrer._id);
             }
@@ -129,7 +128,7 @@ export const registerUser = async (req, res, next) => {
         });
         const registrationTitle = "🎉 Congratulations and Welcome to Turning Point!";
         const registrationBody = `👏 Woohoo, ${newUser.name}! You did it! 🌟 Welcome to the Turning Point community! 🚀 Get ready to immerse yourself in a world of excitement and opportunities! Enjoy watching captivating reels, exploring exclusive offers, enrolling in thrilling lucky draw contests, and much more! 💪 We're thrilled to have you on board, and we can't wait to share all the amazing experiences ahead! Let's dive in and make every moment unforgettable! 🌈`;
-        await sendNotificationMessage(newUser._id, registrationTitle, registrationBody);
+        await sendNotificationMessage(newUser._id, registrationTitle, registrationBody, "New User");
         res.status(200).json({ message: "User Created", data: newUser, token: accessToken, status: true });
     } catch (error) {
         console.error(error);
@@ -297,6 +296,21 @@ export const checkPhoneNumber = async (req, res, next) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Internal Server Error", message: "An unexpected error occurred while checking the phone number." });
+        next(error);
+    }
+};
+export const checkRefCode = async (req, res, next) => {
+    try {
+        const { refCode } = req.body;
+
+        // Check if the reference code exists
+        const user = await Users.findOne({ refCode });
+        const refCodeExists = !!user;
+
+        res.status(200).json(refCodeExists);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json(false); // Send a general error response
         next(error);
     }
 };
@@ -492,6 +506,9 @@ export const updateUserProfile = async (req, res, next) => {
                 if (req.body.idBackImage) {
                     req.body.idBackImage = await storeFileAndReturnNameBase64(req.body.idBackImage);
                 }
+                if (req.body.selfie) {
+                    req.body.selfie = await storeFileAndReturnNameBase64(req.body.selfie);
+                }
                 req.body.kycStatus = "submitted";
             } else {
                 req.body.isActive = false;
@@ -555,12 +572,12 @@ export const updateUserStatus = async (req, res, next) => {
             const title = "🛑 Attention: Profile Disabled by Admin";
             const body = `Uh-oh! It appears that your profile has been temporarily disabled by the admin. 🚫 We understand that this may come as a surprise, but rest assured, we're here to help! Please reach out to our support team for assistance and clarification on why your profile was disabled. We're committed to resolving any issues and ensuring that you have the best experience possible. Thank you for your understanding and cooperation.`;
 
-            await sendNotificationMessage(userId, title, body);
+            await sendNotificationMessage(userId, title, body, "User Status");
         } else {
             const title = "🌟 Congratulations! Your Profile is Approved!";
             const body = `🎉 Great news! Your profile has been approved by the admin! 🚀 Welcome aboard! You're now part of our vibrant community, where exciting opportunities await you. 🌈 Explore, connect, and make the most of your experience with us! Thank you for joining us on this journey. Let's create amazing moments together! ✨`;
 
-            await sendNotificationMessage(userId, title, body);
+            await sendNotificationMessage(userId, title, body, "User Status");
         }
     } catch (err) {
         next(err);
@@ -581,13 +598,13 @@ export const updateUserKycStatus = async (req, res, next) => {
         if (kycStatus === "approved") {
             const title = "🎉 Congratulations! Your KYC is Approved!";
             const body = `👏 Hooray! We're excited to announce that your KYC (Know Your Customer) verification has been successfully approved! 🎉 Get ready to unlock a world of exciting opportunities, including exclusive lucky draws, amazing rewards, and much more! 🌟 Thank you for being part of our community, and enjoy the incredible benefits that await you! 🥳`;
-            await sendNotificationMessage(userId, title, body);
+            await sendNotificationMessage(userId, title, body, "kyc");
             next();
         }
         if (kycStatus === "rejected") {
             const title = "🚫 KYC Submission Rejected";
             const body = `Uh-oh! It seems there was an issue with your KYC submission, and it has been rejected. 😔 Don't worry though! Our team is here to help. Please take a moment to review your submission and make any necessary updates. Once you're ready, feel free to resubmit, and we'll do our best to assist you every step of the way! 🛠️ Thank you for your understanding and cooperation.`;
-            await sendNotificationMessage(userId, title, body);
+            await sendNotificationMessage(userId, title, body, "kyc");
             next();
         }
     } catch (err) {

@@ -44,7 +44,7 @@ export const sendNotification = async (fcmToken, name, message) => {
     }
 };
 
-export const sendNotificationMessage = async (userId, title, message) => {
+export const sendNotificationMessage = async (userId, title, message, type) => {
     console.log("ids", userId);
     const user = await userModel.findOne({ _id: userId });
     if (!user || !user.fcmToken) {
@@ -58,18 +58,22 @@ export const sendNotificationMessage = async (userId, title, message) => {
                 title: title,
                 body: message,
             },
+            data: {
+                // Additional data fields
+                type: type,
+            },
         };
         const response = await admin.messaging().send({
             token: user.fcmToken,
             notification: payload.notification, // Use notification field directly
+            data: payload.data,
         });
         console.log("Notification sent successfully:", response);
-        // return response;
+        return response;
     } catch (error) {
         // Check if the error is related to "Requested entity was not found"
         if (error.code === "messaging/invalid-argument") {
             console.error("FCM token is invalid:", error);
-            // Handle the error, e.g., log it or throw a custom error
         } else {
             console.error("Error sending notification:", error);
             throw new Error("Error sending notification");
