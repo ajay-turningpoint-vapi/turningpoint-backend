@@ -302,7 +302,6 @@ export const checkPhoneNumber = async (req, res, next) => {
 export const checkRefCode = async (req, res, next) => {
     try {
         const { refCode } = req.body;
-
         // Check if the reference code exists
         const user = await Users.findOne({ refCode });
         const refCodeExists = !!user;
@@ -1047,6 +1046,47 @@ export const getUserContestsReport = async (req, res, next) => {
                 $project: {
                     userIdObject: 0, // Exclude userIdObject field from output
                     contestIdObject: 0, // Exclude contestIdObject field from output
+                    "userObj._id": 0,
+                    "userObj.bankDetails": 0,
+                    "userObj.businessName": 0,
+                    "userObj.contractor": 0,
+                    "userObj.createdAt": 0,
+                    "userObj.email": 0,
+                    "userObj.fcmToken": 0,
+                    "userObj.idBackImage": 0,
+                    "userObj.idFrontImage": 0,
+                    "userObj.image": 0,
+                    "userObj.isActive": 0,
+                    "userObj.isOnline": 0,
+                    "userObj.kycStatus": 0,
+                    "userObj.phone": 0,
+                    "userObj.pincode": 0,
+                    "userObj.points": 0,
+                    "userObj.refCode": 0,
+                    "userObj.referralRewards": 0,
+                    "userObj.referrals": 0,
+                    "userObj.role": 0,
+                    "userObj.selfie": 0,
+                    "userObj._v": 0,
+                    "userObj.uid": 0,
+                    "userObj.updatedAt": 0,
+                    "contestObj._id": 0,
+                    "contestObj.antimationTime": 0,
+                    "contestObj.contestId": 0,
+                    "contestObj.createdAt": 0,
+                    "contestObj.description": 0,
+                    "contestObj.endDate": 0,
+                    "contestObj.endTime": 0,
+                    "contestObj.image": 0,
+                    "contestObj.points": 0,
+                    "contestObj.rulesArr": 0,
+                    "contestObj.startDate": 0,
+                    "contestObj.startTime": 0,
+                    "contestObj.status": 0,
+                    "contestObj.updatedAt": 0,
+                    "contestObj.userJoin": 0,
+                    "contestObj.__v": 0,
+                    "contestObj.subtitle": 0,
                 },
             },
             {
@@ -1075,26 +1115,19 @@ export const getUserContestsReport = async (req, res, next) => {
 
 export const getUserContestsJoinCount = async (req, res, next) => {
     try {
-        // Aggregate to get distinct users
-        const distinctUserContests = await UserContest.aggregate([{ $group: { _id: "$userId" } }]);
-        let totalJoinCount = 0;
-        // Iterate through the distinct user contests and calculate total join count
-        for (const userContest of distinctUserContests) {
-            const userJoinCount = await UserContest.countDocuments({ userId: userContest._id });
-            totalJoinCount += userJoinCount;
-        }
+        // Count the number of documents with the specified contestId and status "join"
+        const totalJoinCount = await UserContest.countDocuments({ contestId: req.params.id });
 
         res.status(200).json({
             message: "Total Join Count",
-            totalJoinCount: totalJoinCount,
+            totalJoinCount,
             success: true,
         });
     } catch (error) {
-        console.error(error);
+        console.error("Error in getUserContestsJoinCount:", error);
         next(error);
     }
 };
-
 export const getUserContests = async (req, res, next) => {
     try {
         // Pagination parameters

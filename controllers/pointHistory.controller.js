@@ -118,7 +118,8 @@ export const getPointHistory = async (req, res, next) => {
 
         pointHistoryArr = await pointHistory.aggregate(pipeline);
         for (let pointHistory of pointHistoryArr) {
-            let UserObj = await Users.findById(pointHistory.userId).lean().exec();
+            let userProjection = { name: 1, email: 1, phone: 1, }; 
+            let UserObj = await Users.findById(pointHistory.userId,userProjection).lean().exec();
             pointHistory.user = UserObj;
         }
 

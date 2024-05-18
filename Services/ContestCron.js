@@ -6,59 +6,60 @@ import { sendNotificationMessage } from "../middlewares/fcm.middleware";
 
 export const checkContest = async (date, time) => {
     try {
-        let dateToBeComparedStart = new Date(date);
-        dateToBeComparedStart.setHours(0, 0, 0);
-        let dateToBeComparedEnd = new Date(date);
-        dateToBeComparedEnd.setHours(23, 59, 59);
-        let openContests = await Contest.find({
+        const startDate = new Date(date);
+        startDate.setHours(0, 0, 0);
+        const endDate = new Date(date);
+        endDate.setHours(23, 59, 59);
+
+        const openContests = await Contest.find({
             antimationTime: `${time}`.replace("-", ":"),
-            endDate: { $gte: dateToBeComparedStart.getTime(), $lte: dateToBeComparedEnd.getTime() },
+            endDate: { $gte: startDate, $lte: endDate },
             status: "APPROVED",
         }).exec();
-        console.log("litst of contest", openContests);
-        for (const el of openContests) {
-            try {
-                const updatedContest = await Contest.findOneAndUpdate({ _id: el._id, status: "APPROVED" }, { $set: { status: "PROCESSING" } }, { new: true }).exec();
 
-                if (!updatedContest) {
-                    console.log(`Contest ${el._id} is already being processed by another instance.`);
-                    continue;
-                }
-
-                let contestPrizes = await Prize.find({ contestId: el._id }).sort({ rank: 1 }).lean().exec();
-                let contestUsers = await userContest.find({ contestId: el._id, status: "join" }).lean().exec();
-
-                let allocatedPrizeIds = new Set();
-
-                if (contestPrizes.length > 0 && contestUsers.length > 0) {
-                    for (let prize of contestPrizes) {
-                        if (!contestUsers.length) {
-                            break;
-                        }
-
-                        if (allocatedPrizeIds.has(prize._id)) {
-                            continue;
-                        }
-
-                        var randomItem = contestUsers[Math.floor(Math.random() * contestUsers.length)];
-                        await userContest.findByIdAndUpdate(randomItem._id, { status: "win", rank: prize?.rank }).exec();
-                        contestUsers = contestUsers.filter((el) => `${el._id}` != `${randomItem._id}`);
-
-                        allocatedPrizeIds.add(prize._id);
-                    }
-                }
-
-                await userContest.updateMany({ contestId: el._id, status: "join" }, { status: "lose" }).exec();
-
-                await Contest.findByIdAndUpdate(updatedContest._id, { status: "CLOSED" }).exec();
-            } catch (err) {
-                console.error(err);
-            }
+        if (openContests.length === 0) {
+            console.log("No contests found.");
+            return;
         }
 
-        console.log(dateToBeComparedStart.getTime(), time);
+        console.log("List of contests:", openContests);
+
+        for (const contest of openContests) {
+            const updatedContest = await Contest.findOneAndUpdate({ _id: contest._id, status: "APPROVED" }, { $set: { status: "PROCESSING" } }, { new: true }).exec();
+
+            if (!updatedContest) {
+                console.log(`Contest ${contest._id} is already being processed by another instance.`);
+                continue;
+            }
+
+            const [contestPrizes, contestUsers] = await Promise.all([Prize.find({ contestId: contest._id }).sort({ rank: 1 }).lean().exec(), userContest.find({ contestId: contest._id, status: "join" }).lean().exec()]);
+
+            const allocatedPrizeIds = new Set();
+
+            if (contestPrizes.length > 0 && contestUsers.length > 0) {
+                for (let prize of contestPrizes) {
+                    if (!contestUsers.length) break;
+                    if (allocatedPrizeIds.has(prize._id)) continue;
+
+                    const randomIndex = Math.floor(Math.random() * contestUsers.length);
+                    const randomUser = contestUsers[randomIndex];
+
+                    await userContest.findByIdAndUpdate(randomUser._id, { status: "win", rank: prize.rank }).exec();
+                    contestUsers.splice(randomIndex, 1); // Remove the user from the array
+                    allocatedPrizeIds.add(prize._id);
+                }
+            }
+
+            if (contestUsers.length > 0) {
+                await userContest.updateMany({ contestId: contest._id, status: "join" }, { status: "lose" }).exec();
+            }
+
+            await Contest.findByIdAndUpdate(updatedContest._id, { status: "CLOSED" }).exec();
+        }
+
+        console.log(startDate.getTime(), time);
         console.log("CronEnd");
     } catch (error) {
-        console.error(error);
+        console.error("Error in checkContest:", error);
     }
 };

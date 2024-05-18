@@ -68,7 +68,7 @@ router.get("/getUserById/:id", authorizeJwt, getUserById);
 router.get("/getUserContests", getUserContests);
 router.get("/getUserContestsReport", getUserContestsReport);
 router.get("/getUserContestsReportLose", getUserContestsReportLose);
-router.get("/getUserContestsCount", getUserContestsJoinCount);
+router.get("/getUserContestsCount/:id", getUserContestsJoinCount);
 router.delete("/deleteById/:id", deleteUser);
 router.get("/not-listed-contractors", notListedContractors);
 router.patch("/monitor-location", authorizeJwt, location);
