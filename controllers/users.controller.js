@@ -941,8 +941,10 @@ export const getUserContestsReportLose = async (req, res, next) => {
             },
             {
                 $project: {
-                    userObj: 1, // Include userObj field
-                    contestObj: 1, // Include contestObj field
+                    // userObj:1,
+                    // contestObj:1,
+                    "userObj.name": 1, // Include userObj field
+                    "contestObj.name": 1, // Include contestObj field
                     joinCount: 1, // Include joinCount field
                     rank: "0", // Include rank field
                     status: "lose", // Include status field
