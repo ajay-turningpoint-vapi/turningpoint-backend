@@ -56,7 +56,24 @@ export const checkContest = async (date, time) => {
 
             await Contest.findByIdAndUpdate(updatedContest._id, { status: "CLOSED" }).exec();
         }
-
+        const userData = await userModel
+            .find({
+                $and: [
+                    { role: { $ne: "ADMIN" } }, // Exclude users with role 'admin'
+                    { name: { $ne: "Contractor" } }, // Exclude users with name 'rohit'
+                ],
+            })
+            .lean()
+            .exec();
+        for (const user of userData) {
+            try {
+                const title = "🎉 Get Ready for the Lucky Draw!";
+                const body = `🍀 Feeling lucky? The moment of truth is near! In just few minutes, we'll be announcing the winners of our exciting lucky draw. 🏆 Don't miss out on your chance to win fabulous prizes! Stay tuned and keep those fingers crossed! 🤞✨`;
+                await sendNotificationMessage(user._id, title, body);
+            } catch {
+                console.error("Error sending notification for user:", user._id, error);
+            }
+        }
         console.log(startDate.getTime(), time);
         console.log("CronEnd");
     } catch (error) {

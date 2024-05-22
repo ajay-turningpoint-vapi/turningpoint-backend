@@ -1,5 +1,85 @@
 import { customAlphabet } from "nanoid";
 import User from "../models/user.model";
+const AWS = require("aws-sdk");
+
+AWS.config.update({
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION,
+});
+const sns = new AWS.SNS();
+
+export const UserActiveSMS = async (req, res, next) => {
+console.log(req.body);
+    
+    try {
+        const { name, phone } = req.body;
+        const profileUrl = "http://api.turningpointvapi.com/Users-list";
+        const params = {
+            Message: `
+Hello Admin,
+            
+A new user has registered on Turning Point App. 
+Please verify and approve the profile. 
+
+Name: ${name} Phone:  ${phone} 
+
+You can view the user's profile here: ${profileUrl}
+
+Thank you,
+Turning Point Team`,
+
+            TopicArn: process.env.SNS_TOPIC_ARN,
+        };
+
+        sns.publish(params, (err, data) => {
+            if (err) {
+                console.log(err, err.stack);
+                // res.status(500).send("Error sending SMS");
+            } else {
+                // res.status(200).send("User registered and SMS sent");
+            }
+        });
+    } catch (err) {
+        console.log(err);
+        next(err);
+    }
+};
+
+export const UserKycSMS = async (req, res, next) => {
+    try {
+        const { name, phone, _id } = req.body;
+        const kycUrl = "http://api.turningpointvapi.com/Users-list";
+        const params = {
+            Message: `
+Hello Admin,
+            
+A new user has submitted KYC for the Turning Point App. 
+Please verify and approve. 
+
+Name: ${name} Phone:  ${phone} 
+       
+You can view the KYC details here: ${kycUrl}
+
+Thank you,
+Turning Point Team`,
+
+            TopicArn: process.env.SNS_TOPIC_ARN,
+        };
+
+        sns.publish(params, (err, data) => {
+            if (err) {
+                console.log(err, err.stack);
+                res.status(500).send("Error sending SMS");
+            } else {
+                res.status(200).send("User registered and SMS sent");
+            }
+        });
+    } catch (err) {
+        console.log(err);
+        next(err);
+    }
+};
 
 const nanoid = customAlphabet("0123456789abcdefghijklmnopqrstuvwxyz", 10);
 
@@ -30,5 +110,3 @@ export const generateRandomWord = (length) => {
     }
     return randomWord;
 };
-
-

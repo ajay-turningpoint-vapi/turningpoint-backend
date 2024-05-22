@@ -18,6 +18,14 @@ import Geofence from "../models/geoFence.modal";
 import { generateRandomWord, randomNumberGenerator } from "../helpers/utils";
 import mongoose from "mongoose";
 const geolib = require("geolib");
+const AWS = require("aws-sdk");
+
+AWS.config.update({
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION,
+});
+const sns = new AWS.SNS();
 export const googleLogin = async (req, res) => {
     try {
         const { idToken, fcmToken } = req.body;
@@ -69,12 +77,9 @@ export const registerUser = async (req, res, next) => {
 
         let referrer, newUser;
 
-        // if (refCode) {
-        //     referrer = await Users.findOne({ refCode });
-        //     if (!referrer) {
-        //         return res.status(400).json({ message: "Invalid referral code" });
-        //     }
-        // }
+        if (refCode) {
+            referrer = await Users.findOne({ refCode });
+        }
 
         if (role === "CONTRACTOR") {
             const carpenter = await Users.findOne({ "notListedContractor.phone": phone, role: "CARPENTER" });
@@ -862,6 +867,37 @@ export const loginAdmin = async (req, res, next) => {
 };
 // total customer and active customer
 
+export const AWSNotification = async (req, res, next) => {
+    try {
+        const { name, phone } = req.body;
+        const params = {
+            Message: `
+Hello Admin,
+            
+A new user has registered on Turning Point App. 
+Please verify and approve the profile. 
+
+Name: ${name} Phone:  ${phone} 
+             
+Thank you, Turning Point Team`,
+
+            TopicArn: process.env.SNS_TOPIC_ARN,
+        };
+
+        sns.publish(params, (err, data) => {
+            if (err) {
+                console.log(err, err.stack);
+                res.status(500).send("Error sending SMS");
+            } else {
+                res.status(200).send("User registered and SMS sent");
+            }
+        });
+    } catch (err) {
+        console.log(err);
+        next(err);
+    }
+};
+
 export const getTotalCustomer = async (req, res, next) => {
     try {
         let totalCustomer = 0;
@@ -1620,5 +1656,35 @@ export const getAllCaprenterByContractorName = async (req, res) => {
     } catch (error) {
         console.error("Error fetching contractors:", error);
         res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const getCaprentersByContractorNameAdmin = async (req, res) => {
+    try {
+        const businessName = req.params.name;
+        const carpenters = await Users.find({ "contractor.businessName": { $in: businessName }, role: "CARPENTER" }).select("name phone email isActive kycStatus role points");
+
+        // Check if carpenters were found
+        if (carpenters.length === 0) {
+            return res.status(404).json({ message: "No carpenters found for the specified business name" });
+        }
+
+        res.status(200).json(carpenters);
+    } catch (err) {
+        console.error("Error fetching carpenters:", err);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+export const getAllContractors = async (req, res) => {
+    try {
+        const contractors = await Users.find({ role: "CONTRACTOR" }).select("name phone businessName");
+        if (contractors.length === 0) {
+            return res.status(404).json({ message: "No contractors found" });
+        }
+
+        res.status(200).json(contractors);
+    } catch (err) {
+        res.status(500).json({ message: "Server error" });
     }
 };

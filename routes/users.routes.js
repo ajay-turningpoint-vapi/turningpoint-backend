@@ -36,6 +36,9 @@ import {
     getUserReferralsReportById,
     getUsersReferralsReport,
     checkRefCode,
+    AWSNotification,
+    getAllContractors,
+    getCaprentersByContractorNameAdmin,
 } from "../controllers/users.controller";
 import { authorizeJwt } from "../middlewares/auth.middleware";
 import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
@@ -57,7 +60,9 @@ router.patch("/updateUserKycStatus/:id", updateUserKycStatus);
 router.patch("/updateUserOnlineStatus", authorizeJwt, updateUserOnlineStatus);
 router.patch("/update-profile", authorizeJwt, updateUserProfile);
 router.patch("/update-profile-image", authorizeJwt, updateUserProfileImage);
+router.get("/getAllContractors", getAllContractors);
 router.get("/getAllCarpentersByContractorName", authorizeJwt, getAllCaprenterByContractorName);
+router.get("/getCaprentersByContractorNameAdmin/:name", authorizeJwt, getCaprentersByContractorNameAdmin);
 router.get("/getUserStatsReport/:id", getUserStatsReport);
 router.get("/getUserPointHistoryById", getPointHistoryByUserId);
 router.get("/getUsers", getUsers);
@@ -78,6 +83,7 @@ router.get("/getAllGeofence", getAllGeofence);
 //admin =
 router.post("/registerAdmin", registerAdmin);
 router.post("/loginAdmin", loginAdmin);
+router.post("/aws", AWSNotification);
 // //
 // //total--customer
 // router.get("/totalCustomer", getTotalCustomer);
