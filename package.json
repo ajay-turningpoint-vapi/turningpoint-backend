@@ -11,7 +11,7 @@
         "@googlemaps/google-maps-services-js": "^3.3.42",
         "archiver": "^5.3.1",
         "aws-sdk": "^2.1569.0",
-        "axios": "^1.6.7",
+        "axios": "^1.7.4",
         "babel-node": "^0.0.1-security",
         "bcryptjs": "^2.4.3",
         "canvas": "^2.11.2",

@@ -45,7 +45,7 @@ export const sendNotification = async (fcmToken, name, message) => {
 };
 
 export const sendNotificationMessage = async (userId, title, message, type) => {
-    console.log("ids", userId);
+   
     const user = await userModel.findOne({ _id: userId });
     if (!user || !user.fcmToken) {
         console.log("FCM token not found for user:", userId);

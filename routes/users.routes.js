@@ -39,18 +39,23 @@ import {
     AWSNotification,
     getAllContractors,
     getCaprentersByContractorNameAdmin,
+    logout,
+    refreshToken,
+    googleLoginTest,
 } from "../controllers/users.controller";
-import { authorizeJwt } from "../middlewares/auth.middleware";
+import {  authorizeJwt } from "../middlewares/auth.middleware";
 import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
 
 let router = express.Router();
 
-router.post("/google-signIn", googleLogin);
+router.post("/google-signIn", googleLoginTest);
+router.post("/refresh-token", refreshToken);
+router.get("/check-token", authorizeJwt, (req, res) => res.json({ valid: true }));
 router.post("/register", registerUser);
 router.get("/applyReward/:id", authorizeJwt, applyRewards);
 router.get("/getUserReferralsReportById/:id", getUserReferralsReportById);
 router.get("/getUserReferralsReports", getUsersReferralsReport);
-router.post("/logout", userLogOut);
+
 router.post("/login", login);
 router.post("/checkPhoneNumber", checkPhoneNumber);
 router.post("/checkRefCode", checkRefCode);
@@ -65,7 +70,7 @@ router.get("/getAllCarpentersByContractorName", authorizeJwt, getAllCaprenterByC
 router.get("/getCaprentersByContractorNameAdmin/:name", authorizeJwt, getCaprentersByContractorNameAdmin);
 router.get("/getUserStatsReport/:id", getUserStatsReport);
 router.get("/getUserPointHistoryById", getPointHistoryByUserId);
-router.get("/getUsers", getUsers);
+router.get("/getUsers", authorizeJwt, getUsers);
 router.get("/getUsersAnalytics", getUsersAnalytics);
 router.get("/getUserActivityAnalysis", authorizeJwt, getUserActivityAnalysis);
 router.get("/getContractors", getContractors);
@@ -84,6 +89,7 @@ router.get("/getAllGeofence", getAllGeofence);
 router.post("/registerAdmin", registerAdmin);
 router.post("/loginAdmin", loginAdmin);
 router.post("/aws", AWSNotification);
+router.post("/logout", userLogOut);
 // //
 // //total--customer
 // router.get("/totalCustomer", getTotalCustomer);

@@ -2,7 +2,7 @@ import { UserList } from "../Builders/user.builder";
 import { comparePassword, encryptPassword } from "../helpers/Bcrypt";
 import { ErrorMessages, pointTransactionType, rolesObj } from "../helpers/Constants";
 import { storeFileAndReturnNameBase64 } from "../helpers/fileSystem";
-import { generateAccessJwt } from "../helpers/Jwt";
+import { generateAccessJwt, generateRefreshJwt } from "../helpers/Jwt";
 import { ValidateEmail, validNo } from "../helpers/Validators";
 import Users from "../models/user.model";
 import UserContest from "../models/userContest";
@@ -10,13 +10,16 @@ import Contest from "../models/contest.model";
 import pointHistoryModel from "../models/pointHistory.model";
 import admin from "../helpers/firebase";
 import ReelLikes from "../models/reelLikes.model";
+import Token from "../models/token.model";
 import { MongoServerError } from "mongodb";
 import { createPointlogs } from "./pointHistory.controller";
 import ReferralRewards from "../models/referralRewards.model";
-import { sendNotification, sendNotificationMessage, sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
+import { sendNotificationMessage } from "../middlewares/fcm.middleware";
 import Geofence from "../models/geoFence.modal";
-import { generateRandomWord, randomNumberGenerator } from "../helpers/utils";
+import { generateRandomWord, randomNumberGenerator, sendWhatsAppMessage } from "../helpers/utils";
+import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
+import { CONFIG } from "../helpers/Config";
 const geolib = require("geolib");
 const AWS = require("aws-sdk");
 
@@ -26,16 +29,139 @@ AWS.config.update({
     region: process.env.AWS_REGION,
 });
 const sns = new AWS.SNS();
+
+export const googleLoginTest = async (req, res) => {
+    const { idToken, fcmToken } = req.body;
+
+    if (!idToken) {
+        return res.status(400).json({ message: "ID token is required", status: false });
+    }
+
+    try {
+        // Verify Google ID token
+        const { uid } = await admin.auth().verifyIdToken(idToken);
+
+        // Check if user exists
+        const existingUser = await Users.findOne({ uid }).exec();
+        if (existingUser) {
+            // Remove any existing token for the user
+            await Token.deleteMany({ uid });
+
+            // Generate new access token
+            const accessToken = await generateAccessJwt({
+                userId: existingUser._id,
+                role: existingUser.role,
+                name: existingUser.name,
+                phone: existingUser.phone,
+                email: existingUser.email,
+                uid: existingUser.uid,
+                fcmToken: existingUser.fcmToken,
+            });
+
+            const refreshToken = await generateRefreshJwt({
+                userId: existingUser._id,
+                role: existingUser.role,
+                name: existingUser.name,
+                phone: existingUser.phone,
+                email: existingUser.email,
+                uid: existingUser.uid,
+                fcmToken: existingUser.fcmToken,
+            });
+            await Token.create({ uid: existingUser.uid, userId: existingUser._id, token: accessToken, refreshToken, fcmToken: existingUser.fcmToken });
+
+            // Update user FCM token
+            existingUser.fcmToken = fcmToken;
+            await existingUser.save();
+
+            // Respond with success
+            res.status(200).json({
+                message: "Login successful",
+                status: true,
+                token: accessToken,
+                rerefreshToken: refreshToken,
+            });
+        } else {
+            res.status(200).json({ message: "User not registered", status: false });
+        }
+    } catch (error) {
+        console.error("Error during Google login:", error);
+
+        let statusCode = 500;
+        let errorMessage = "Internal Server Error";
+
+        // Handle specific Firebase Auth errors
+        if (error.code === "auth/invalid-id-token" || error.code === "auth/id-token-expired") {
+            statusCode = 401;
+            errorMessage = "Unauthorized. Invalid or expired token.";
+        } else if (error.message.includes("User not registered")) {
+            statusCode = 404;
+        }
+
+        res.status(statusCode).json({ error: errorMessage, status: false });
+    }
+};
+
+export const refreshToken = async (req, res) => {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+        return res.status(400).json({ message: "Refresh token is required", status: false });
+    }
+
+    try {
+        // Verify the refresh token
+        const decoded = jwt.verify(refreshToken, CONFIG.JWT_REFERSH_TOKEN_SECRET);
+        const { uid } = decoded;
+        // Check if the refresh token exists in the database
+        const storedToken = await Token.findOne({ uid }).exec();
+        if (!storedToken || storedToken.token !== refreshToken) {
+            return res.status(401).json({ message: "Invalid or expired refresh token", status: false });
+        }
+
+        // Generate a new access token
+        const accessToken = await generateAccessJwt({
+            userId: decoded.userId,
+            role: decoded.role,
+            uid: decoded.uid,
+            fcmToken: decoded.fcmToken,
+        });
+
+        const newRefreshToken = generateRefreshJwt({ userId: decoded.userId, role: decoded.role, uid: decoded.uid, fcmToken: decoded.fcmToken });
+        await Token.findOneAndUpdate({ userId }, { token: accessToken, refreshToken: newRefreshToken }, { new: true }).exec();
+
+        // Respond with the new access token
+        res.status(200).json({
+            message: "Token refreshed successfully",
+            status: true,
+            token: accessToken,
+            refreshToken: newRefreshToken,
+        });
+    } catch (error) {
+        console.error("Error during token refresh:", error);
+
+        let statusCode = 500;
+        let errorMessage = "Internal Server Error";
+
+        if (error.name === "JsonWebTokenError") {
+            statusCode = 401;
+            errorMessage = "Unauthorized. Invalid refresh token.";
+        } else if (error.name === "TokenExpiredError") {
+            statusCode = 401;
+            errorMessage = "Unauthorized. Refresh token has expired.";
+        }
+
+        res.status(statusCode).json({ error: errorMessage, status: false });
+    }
+};
+
 export const googleLogin = async (req, res) => {
     try {
         const { idToken, fcmToken } = req.body;
+        console.log(req.body);
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         const { uid, name, email, picture } = decodedToken;
-        // Find user by matching both uid and phone
         const existingUser = await Users.findOne({ uid: uid });
-
         if (existingUser) {
-            // Check if the UID matches the user's UID
             if (existingUser.uid !== uid) {
                 throw { status: 400, message: "GoogleId or phone number do not match" };
             }
@@ -46,8 +172,11 @@ export const googleLogin = async (req, res) => {
                 name: existingUser?.name,
                 phone: existingUser?.phone,
                 email: existingUser?.email,
+                uid: existingUser.uid,
             });
+
             existingUser.fcmToken = fcmToken;
+
             await existingUser.save();
             res.status(200).json({ message: "LogIn Successful", status: true, token: accessToken });
         } else {
@@ -66,7 +195,6 @@ export const googleLogin = async (req, res) => {
 export const registerUser = async (req, res, next) => {
     try {
         const { phone, role, idToken, fcmToken, refCode, businessName } = req.body;
-        console.log(req.body.refCode);
 
         const userExistCheck = await Users.findOne({ $or: [{ phone }, { email: new RegExp(`^${req.body.email}$`, "i") }] });
         if (userExistCheck) {
@@ -130,10 +258,23 @@ export const registerUser = async (req, res, next) => {
             userId: newUser?._id,
             phone: newUser?.phone,
             email: newUser?.email,
+            uid: newUser?.uid,
+            fcmToken: newUser?.fcmToken,
         });
+        let refreshToken = await generateRefreshJwt({
+            userId: newUser?._id,
+            phone: newUser?.phone,
+            email: newUser?.email,
+            uid: newUser?.uid,
+            fcmToken: newUser?.fcmToken,
+        });
+
+        await Token.create({ uid: newUser.uid, userId: newUser._id, token: accessToken, refreshToken, fcmToken: newUser?.fcmToken });
+
         const registrationTitle = "🎉 Congratulations and Welcome to Turning Point!";
         const registrationBody = `👏 Woohoo, ${newUser.name}! You did it! 🌟 Welcome to the Turning Point community! 🚀 Get ready to immerse yourself in a world of excitement and opportunities! Enjoy watching captivating reels, exploring exclusive offers, enrolling in thrilling lucky draw contests, and much more! 💪 We're thrilled to have you on board, and we can't wait to share all the amazing experiences ahead! Let's dive in and make every moment unforgettable! 🌈`;
         await sendNotificationMessage(newUser._id, registrationTitle, registrationBody, "New User");
+        sendWhatsAppMessage("newuser", "918975944936", newUser.name, newUser.phone, newUser.email);
         res.status(200).json({ message: "User Created", data: newUser, token: accessToken, status: true });
     } catch (error) {
         console.error(error);
@@ -269,19 +410,32 @@ export const getUsersReferralsReport = async (req, res, next) => {
 };
 
 export const userLogOut = async (req, res) => {
-    const token = req.headers.authorization.split(" ")[1];
     try {
-        const decodedToken = jwt.verify(token, process.env.JWT_ACCESS_TOKEN_SECRET);
-        const userId = decodedToken.id;
-        const user = await Users.findById(userId);
-        if (user) {
-            user.tokens = user.tokens.filter((t) => t !== token);
-            await user.save();
+        const token = req.header("Authorization")?.replace("Bearer ", "");
+
+        if (token) {
+            // Find the token
+            const foundToken = await Token.findOne({ token });
+
+            if (!foundToken) {
+                return res.status(404).json({ message: "Token not found" });
+            }
+            const userIdString = foundToken.userId.toString();
+
+            const registrationTitle = "Session Expired!!";
+            const registrationBody = "Your session has expired. Please log in again";
+            await sendNotificationMessage(userIdString, registrationTitle, registrationBody, "session_expired");
+
+            // Remove the token
+            await Token.deleteOne({ token });
+
+            res.status(200).json({ message: "Logged out successfully" });
+        } else {
+            res.status(400).json({ message: "No token provided" });
         }
-        res.json({ message: "Logout successful" });
-    } catch (error) {
-        console.error("Logout error:", error);
-        res.status(500).json({ message: "Logout failed" });
+    } catch (err) {
+        console.error("Error during logout:", err);
+        res.status(500).json({ message: "Internal Server Error" });
     }
 };
 
@@ -391,12 +545,10 @@ export const location = async (req, res) => {
                 });
 
                 console.log("inside", usersToNotify);
-                // Send notifications to users within the geofence
-
-                for (const user of usersToNotify) {
-                    const name = "Turning Point";
-                    await sendNotification(user.fcmToken, name, geofence.notificationMessage);
-                }
+                // for (const user of usersToNotify) {
+                //     const name = "Turning Point";
+                //     await sendNotification(user.fcmToken, name, geofence.notificationMessage);
+                // }
             } else {
                 console.log("Outside geofence radius");
             }
@@ -532,6 +684,8 @@ export const updateUserProfile = async (req, res, next) => {
                 },
             ];
             req.body.bankDetails = bankDetails;
+            sendWhatsAppMessage("userkyc", "918975944936", userObj.name, userObj.phone, userObj.email);
+            next();
         }
 
         userObj = await Users.findByIdAndUpdate(req.user.userId, req.body).exec();
@@ -603,6 +757,7 @@ export const updateUserKycStatus = async (req, res, next) => {
             const title = "🎉 Congratulations! Your KYC is Approved!";
             const body = `👏 Hooray! We're excited to announce that your KYC (Know Your Customer) verification has been successfully approved! 🎉 Get ready to unlock a world of exciting opportunities, including exclusive lucky draws, amazing rewards, and much more! 🌟 Thank you for being part of our community, and enjoy the incredible benefits that await you! 🥳`;
             await sendNotificationMessage(userId, title, body, "kyc");
+
             next();
         }
         if (kycStatus === "rejected") {
@@ -617,20 +772,46 @@ export const updateUserKycStatus = async (req, res, next) => {
     }
 };
 
+const updateUserOnlineStatusWithRetry = async (userId, isOnline, retries = 3) => {
+    let attempt = 0;
+    while (attempt < retries) {
+        try {
+            return await Users.findByIdAndUpdate(userId, { isOnline }, { new: true, runValidators: true });
+        } catch (error) {
+            attempt++;
+            console.error(`Attempt ${attempt} - Error updating user activity`, error);
+            if (attempt >= retries) throw error;
+        }
+    }
+};
+
 export const updateUserOnlineStatus = async (req, res) => {
-    // try {
-    //     const { userId } = req.user;
-    //     const { isOnline } = req.body;
-    //     console.log(isOnline);
-    //     const updatedUser = await Users.findByIdAndUpdate(userId, { isOnline }, { new: true });
-    //     if (!updatedUser) {
-    //         return res.status(404).json({ error: "User not found" });
-    //     }
-    //     res.json({ user: updatedUser });
-    // } catch (error) {
-    //     console.error("Error updating user activity", error);
-    //     res.status(500).json({ error: "Internal server error" });
-    // }
+    try {
+        const { userId } = req.user;
+        const { isOnline } = req.body;
+
+        if (typeof isOnline !== "boolean") {
+            return res.status(400).json({ error: "Invalid input, 'isOnline' must be a boolean" });
+        }
+
+        console.log(`Updating online status for user ${userId} to ${isOnline}`);
+
+        const updatedUser = await updateUserOnlineStatusWithRetry(userId, isOnline);
+
+        if (!updatedUser) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        res.json({ user: updatedUser });
+    } catch (error) {
+        console.error("Error updating user activity", error);
+
+        if (error.name === "CastError" && error.kind === "ObjectId") {
+            return res.status(400).json({ error: "Invalid user ID" });
+        }
+
+        res.status(500).json({ error: "Internal server error" });
+    }
 };
 
 export const getUsersAnalytics = async (req, res, next) => {
@@ -845,7 +1026,6 @@ export const registerAdmin = async (req, res, next) => {
 };
 export const loginAdmin = async (req, res, next) => {
     try {
-        console.log(req.body);
         const adminObj = await Users.findOne({ $or: [{ email: new RegExp(`^${req.body.email}$`) }, { phone: req.body.phone }], role: rolesObj.ADMIN })
             .lean()
             .exec();
@@ -853,7 +1033,8 @@ export const loginAdmin = async (req, res, next) => {
             const passwordCheck = await comparePassword(adminObj.password, req.body.password);
             if (passwordCheck) {
                 let accessToken = await generateAccessJwt({ userId: adminObj._id, role: rolesObj.ADMIN, user: { name: adminObj.name, email: adminObj.email, phone: adminObj.phone, _id: adminObj._id } });
-                res.status(200).json({ message: "LogIn Successfull", token: accessToken, success: true });
+                let refreshToken = await generateRefreshJwt({ userId: adminObj._id, role: rolesObj.ADMIN, user: { name: adminObj.name, email: adminObj.email, phone: adminObj.phone, _id: adminObj._id } });
+                res.status(200).json({ message: "LogIn Successfull", token: accessToken, refreshToken, success: true });
             } else {
                 throw { status: 401, message: "Invalid Password" };
             }
@@ -1688,3 +1869,35 @@ export const getAllContractors = async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 };
+
+export const logout = async (req, res) => {
+    console.log(req.user);
+    console.log("test");
+};
+
+// async (req, res) => {
+//     try {
+//       const { id } = req.params;
+
+//       // Validate ID format
+//       if (!mongoose.Types.ObjectId.isValid(id)) {
+//         return res.status(400).json({ message: 'Invalid user ID' });
+//       }
+
+//       // Delete user from the database
+//       const result = await Token.findByIdAndDelete(id);
+
+//       // Check if the user was found and deleted
+//       if (!result) {
+//         return res.status(404).json({ message: 'Token not found' });
+//       }
+
+//       // Respond with success message
+//       res.status(200).json({ message: 'User logged out successfully' });
+
+//     } catch (error) {
+//       // Handle unexpected errors
+//       console.error('Error during deletion:', error);
+//       res.status(500).json({ message: 'Internal server error' });
+//     }
+//   }

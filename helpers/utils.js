@@ -1,7 +1,9 @@
 import { customAlphabet } from "nanoid";
 import User from "../models/user.model";
+import axios from "axios";
 const AWS = require("aws-sdk");
-
+import { CONFIG } from "../helpers/Config";
+const apiKey = CONFIG.API_KEY;
 AWS.config.update({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -10,8 +12,8 @@ AWS.config.update({
 const sns = new AWS.SNS();
 
 export const UserActiveSMS = async (req, res, next) => {
-console.log(req.body);
-    
+    console.log(req.body);
+
     try {
         const { name, phone } = req.body;
         const profileUrl = "http://api.turningpointvapi.com/Users-list";
@@ -110,3 +112,55 @@ export const generateRandomWord = (length) => {
     }
     return randomWord;
 };
+
+export async function sendWhatsAppMessage(templateName, to, body_1, body_2, body_3) {
+    const payload = {
+        integrated_number: "918200025803",
+        content_type: "template",
+        payload: {
+            messaging_product: "whatsapp",
+            type: "template",
+            template: {
+                name: templateName,
+                language: {
+                    code: "en",
+                    policy: "deterministic",
+                },
+                namespace: null,
+                to_and_components: [
+                    {
+                        to: [to],
+                        components: {
+                            body_1: {
+                                type: "text",
+                                value: body_1,
+                            },
+                            body_2: {
+                                type: "text",
+                                value: body_2,
+                            },
+                            body_3: {
+                                type: "text",
+                                value: body_3,
+                            },
+                        },
+                    },
+                ],
+            },
+        },
+    };
+
+    try {
+        const response = await axios.post("https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/", payload, {
+            headers: {
+                authkey: `418451AzKt9qoMmlL664c674fP1`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        return response.data;
+        
+    } catch (error) {
+        console.error("Error sending WhatsApp message:", error);
+    }
+}
