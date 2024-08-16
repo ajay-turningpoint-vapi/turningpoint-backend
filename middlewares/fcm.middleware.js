@@ -74,9 +74,13 @@ export const sendNotificationMessage = async (userId, title, message, type) => {
         // Check if the error is related to "Requested entity was not found"
         if (error.code === "messaging/invalid-argument") {
             console.error("FCM token is invalid:", error);
-        } else {
-            console.error("Error sending notification:", error);
-            throw new Error("Error sending notification");
+        } else if (error.code == "messaging/registration-token-not-registered") {
+            return;
+        }       
+        else {
+            //Don't wanna throw any exception in notification sending as of now
+            console.error("Error sending notification:", error.code);
+            return;
         }
     }
 };

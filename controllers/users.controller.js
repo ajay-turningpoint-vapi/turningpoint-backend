@@ -44,9 +44,14 @@ export const googleLoginTest = async (req, res) => {
         // Check if user exists
         const existingUser = await Users.findOne({ uid }).exec();
         if (existingUser) {
-            const title = "Session Invalidated";
-            const body = "You have been logged out from another device";
+          let previousFcmToken = existingUser.fcmToken;
+          
+          if (previousFcmToken != fcmToken) {
+            const title = "Session Terminated";
+            const body = "Account was logged in on another device";
             await sendNotificationMessage(existingUser._id, title, body, "session_expired");
+          }
+                 
             // Remove any existing token for the user
             await Token.deleteMany({ uid });
 
@@ -75,9 +80,13 @@ export const googleLoginTest = async (req, res) => {
             // Update user FCM token
             existingUser.fcmToken = fcmToken;
             await existingUser.save();
-
-     
-            // await sendNotificationMessage(existingUser._id, "Session Terminated", "You have been logged out from another device", "session_expired");
+            
+            //Notification to the current device to let the users know they have been terminated from the previous device
+            if (previousFcmToken != fcmToken) {
+                const title = "Session Terminated";
+                const body = "You have been logged out from another device";
+                await sendNotificationMessage(existingUser._id, title, body, "session_expiry_notification");
+            }
 
             // Respond with success
             res.status(200).json({
