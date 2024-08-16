@@ -73,6 +73,10 @@ export const googleLoginTest = async (req, res) => {
             existingUser.fcmToken = fcmToken;
             await existingUser.save();
 
+            const title = "Session Invalidated";
+            const body = "You have been logged out from another device";
+            await sendNotificationMessage(existingUser._id, title, body, "session_expired");
+
             // Respond with success
             res.status(200).json({
                 message: "Login successful",
@@ -410,33 +414,11 @@ export const getUsersReferralsReport = async (req, res, next) => {
 };
 
 export const userLogOut = async (req, res) => {
-    try {
-        const token = req.header("Authorization")?.replace("Bearer ", "");
-
-        if (token) {
-            // Find the token
-            const foundToken = await Token.findOne({ token });
-
-            if (!foundToken) {
-                return res.status(404).json({ message: "Token not found" });
-            }
-            const userIdString = foundToken.userId.toString();
-
-            const registrationTitle = "Session Expired!!";
-            const registrationBody = "Your session has expired. Please log in again";
-            await sendNotificationMessage(userIdString, registrationTitle, registrationBody, "session_expired");
-
-            // Remove the token
-            await Token.deleteOne({ token });
-
-            res.status(200).json({ message: "Logged out successfully" });
-        } else {
-            res.status(400).json({ message: "No token provided" });
-        }
-    } catch (err) {
-        console.error("Error during logout:", err);
-        res.status(500).json({ message: "Internal Server Error" });
+    const token = req.header("Authorization")?.replace("Bearer ", "");
+    if (token) {
+        await Token.deleteOne({ token });
     }
+    res.status(200).json({ message: "Logged out" });
 };
 
 export const checkPhoneNumber = async (req, res, next) => {
