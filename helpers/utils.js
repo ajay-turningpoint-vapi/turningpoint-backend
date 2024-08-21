@@ -159,7 +159,125 @@ export async function sendWhatsAppMessage(templateName, to, body_1, body_2, body
         });
 
         return response.data;
-        
+    } catch (error) {
+        console.error("Error sending WhatsApp message:", error);
+    }
+}
+
+export async function sendWhatsAppMessageForBankTransfer(body_1, body_2, body_3,body_4,body_5,body_6) {
+    const payload = {
+        "integrated_number": "918200025803",
+        "content_type": "template",
+        "payload": {
+            "messaging_product": "whatsapp",
+            "type": "template",
+            "template": {
+                "name": "banktransfer",
+                "language": {
+                    "code": "en",
+                    "policy": "deterministic"
+                },
+                "namespace": null,
+                "to_and_components": [
+                    {
+                        "to": [
+                            "918975944936"
+                        ],
+                        "components": {
+                            "body_1": {
+                                "type": "text",
+                                "value": body_1
+                            },
+                            "body_2": {
+                                "type": "text",
+                                "value": body_2
+                            },
+                            "body_3": {
+                                "type": "text",
+                                "value": body_3
+                            },
+                            "body_4": {
+                                "type": "text",
+                                "value": body_4
+                            },
+                            "body_5": {
+                                "type": "text",
+                                "value": body_5
+                            },
+                            "body_6": {
+                                "type": "text",
+                                "value": body_6
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    };
+
+    try {
+        const response = await axios.post("https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/", payload, {
+            headers: {
+                authkey: `418451AzKt9qoMmlL664c674fP1`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        return response.data;
+    } catch (error) {
+        console.error("Error sending WhatsApp message:", error);
+    }
+}
+
+
+export async function sendWhatsAppMessageForUPITransfer(body_1, body_2, body_3) {
+    const payload = {
+        "integrated_number": "918200025803",
+        "content_type": "template",
+        "payload": {
+            "messaging_product": "whatsapp",
+            "type": "template",
+            "template": {
+                "name": "upitransfer",
+                "language": {
+                    "code": "en",
+                    "policy": "deterministic"
+                },
+                "namespace": null,
+                "to_and_components": [
+                    {
+                        "to": [
+                            "918975944936"
+                        ],
+                        "components": {
+                            "body_1": {
+                                "type": "text",
+                                "value": body_1
+                            },
+                            "body_2": {
+                                "type": "text",
+                                "value": body_2
+                            },
+                            "body_3": {
+                                "type": "text",
+                                "value": body_3
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    };
+
+    try {
+        const response = await axios.post("https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/", payload, {
+            headers: {
+                authkey: `418451AzKt9qoMmlL664c674fP1`,
+                "Content-Type": "application/json",
+            },
+        });
+
+        return response.data;
     } catch (error) {
         console.error("Error sending WhatsApp message:", error);
     }

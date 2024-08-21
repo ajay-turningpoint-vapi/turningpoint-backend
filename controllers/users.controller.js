@@ -17,9 +17,12 @@ import ReferralRewards from "../models/referralRewards.model";
 import { sendNotificationMessage } from "../middlewares/fcm.middleware";
 import Geofence from "../models/geoFence.modal";
 import { generateRandomWord, randomNumberGenerator, sendWhatsAppMessage } from "../helpers/utils";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import { CONFIG } from "../helpers/Config";
+import axios from "axios";
+import otpModel from "../models/otp.model";
 const geolib = require("geolib");
 const AWS = require("aws-sdk");
 
@@ -29,7 +32,51 @@ AWS.config.update({
     region: process.env.AWS_REGION,
 });
 const sns = new AWS.SNS();
+const generateOtp = () => {
+    return crypto.randomInt(100000, 1000000).toString();
+};
 
+export const phoneOtpgenerate = async (req, res) => {
+    const { phone } = req.body;
+
+    // Generate OTP
+    const otp = generateOtp();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    // Save OTP to database
+    const otpEntry = new otpModel({ phone, otp, expiresAt });
+    await otpEntry.save();
+
+    // TODO: Send OTP to phoneNumber via SMS service
+    // Example: sendOtp(phoneNumber, otp);
+
+    res.status(200).json({ message: "OTP sent to phone number" });
+};
+
+export const verifyOtp = async (req, res) => {
+    const { phone, otp } = req.body;
+    console.log(req.body);
+
+    // Find OTP entry
+    const otpEntry = await otpModel.findOne({ phone, otp });
+    console.log(otpEntry);
+
+    if (!otpEntry) {
+        return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    // Check if OTP has expired
+    if (otpEntry.expiresAt < Date.now()) {
+        return res.status(400).json({ message: "OTP expired" });
+    }
+
+    // Mark OTP as verified
+    otpEntry.isVerified = true;
+    await otpEntry.save();
+    await otpModel.deleteOne({ phone, otp });
+
+    res.status(200).json({ message: "OTP verified successfully" });
+};
 export const googleLoginTest = async (req, res) => {
     const { idToken, fcmToken } = req.body;
 
@@ -44,14 +91,14 @@ export const googleLoginTest = async (req, res) => {
         // Check if user exists
         const existingUser = await Users.findOne({ uid }).exec();
         if (existingUser) {
-          let previousFcmToken = existingUser.fcmToken;
-          
-          if (previousFcmToken != fcmToken) {
-            const title = "Session Terminated";
-            const body = "Account was logged in on another device";
-            await sendNotificationMessage(existingUser._id, title, body, "session_expired");
-          }
-                 
+            let previousFcmToken = existingUser.fcmToken;
+
+            if (previousFcmToken != fcmToken) {
+                const title = "Session Terminated";
+                const body = "Account was logged in on another device";
+                await sendNotificationMessage(existingUser._id, title, body, "session_expired");
+            }
+
             // Remove any existing token for the user
             await Token.deleteMany({ uid });
 
@@ -80,7 +127,7 @@ export const googleLoginTest = async (req, res) => {
             // Update user FCM token
             existingUser.fcmToken = fcmToken;
             await existingUser.save();
-            
+
             //Notification to the current device to let the users know they have been terminated from the previous device
             if (previousFcmToken != fcmToken) {
                 const title = "Session Terminated";
@@ -206,7 +253,6 @@ export const googleLogin = async (req, res) => {
         }
     }
 };
-
 export const registerUser = async (req, res, next) => {
     try {
         const { phone, role, idToken, fcmToken, refCode, businessName } = req.body;
@@ -292,7 +338,7 @@ export const registerUser = async (req, res, next) => {
         sendWhatsAppMessage("newuser", "918975944936", newUser.name, newUser.phone, newUser.email);
         res.status(200).json({ message: "User Created", data: newUser, token: accessToken, status: true });
     } catch (error) {
-        console.error(error);
+        console.error("register user",error);
         next(error);
     }
 };
@@ -636,6 +682,8 @@ export const getAllGeofence = async (req, res) => {
 };
 
 export const updateUserProfile = async (req, res, next) => {
+    console.log(req.body);
+
     try {
         let userObj = await Users.findById(req.user.userId).exec();
         if (!userObj) {
@@ -647,21 +695,7 @@ export const updateUserProfile = async (req, res, next) => {
             }
         }
         if (req.body.idFrontImage) {
-            if (req.body.idFrontImage.split("/")[0] === "furnipart") {
-                if (req.body.idFrontImage) {
-                    req.body.idFrontImage = await storeFileAndReturnNameBase64(req.body.idFrontImage);
-                }
-
-                if (req.body.idBackImage) {
-                    req.body.idBackImage = await storeFileAndReturnNameBase64(req.body.idBackImage);
-                }
-                if (req.body.selfie) {
-                    req.body.selfie = await storeFileAndReturnNameBase64(req.body.selfie);
-                }
-                req.body.kycStatus = "submitted";
-            } else {
-                req.body.isActive = false;
-            }
+            req.body.kycStatus = "submitted";
         } else {
             req.body.isActive = false;
         }
@@ -678,10 +712,9 @@ export const updateUserProfile = async (req, res, next) => {
             ];
             req.body.bankDetails = bankDetails;
             sendWhatsAppMessage("userkyc", "918975944936", userObj.name, userObj.phone, userObj.email);
-            next();
         }
 
-        userObj = await Users.findByIdAndUpdate(req.user.userId, req.body).exec();
+        userObj = await Users.findByIdAndUpdate(req.user.userId, req.body, { new: true }).exec();
         res.status(200).json({ message: "Profile Updated Successfully", data: userObj, success: true });
     } catch (err) {
         if (err instanceof MongoServerError && err.code === 11000) {
@@ -690,6 +723,7 @@ export const updateUserProfile = async (req, res, next) => {
         next(err);
     }
 };
+
 export const updateUserProfileImage = async (req, res, next) => {
     try {
         let userObj = await Users.findById(req.user.userId).exec();

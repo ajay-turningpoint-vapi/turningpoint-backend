@@ -42,8 +42,10 @@ import {
     logout,
     refreshToken,
     googleLoginTest,
+    verifyOtp,
+    phoneOtpgenerate,
 } from "../controllers/users.controller";
-import {  authorizeJwt } from "../middlewares/auth.middleware";
+import { authorizeJwt } from "../middlewares/auth.middleware";
 import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
 
 let router = express.Router();
@@ -58,6 +60,9 @@ router.get("/getUserReferralsReports", getUsersReferralsReport);
 
 router.post("/login", login);
 router.post("/checkPhoneNumber", checkPhoneNumber);
+
+router.post("/generateOtp", phoneOtpgenerate);
+router.post("/verifyOtp", verifyOtp);
 router.post("/checkRefCode", checkRefCode);
 router.patch("/updateUserStatus/:id", updateUserStatus);
 router.put("/updateStatus", testupdate);

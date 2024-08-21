@@ -4,6 +4,7 @@ import Users from "../models/user.model";
 import Coupon from "../models/Coupons.model";
 import mongoose from "mongoose";
 import userModel from "../models/user.model";
+import { sendWhatsAppMessageForBankTransfer, sendWhatsAppMessageForUPITransfer } from "../helpers/utils";
 
 export const createPointlogs = async (userId, amount, type, description, mobileDescription, status = "pending", additionalInfo = {}) => {
     let historyLog = {
@@ -118,8 +119,8 @@ export const getPointHistory = async (req, res, next) => {
 
         pointHistoryArr = await pointHistory.aggregate(pipeline);
         for (let pointHistory of pointHistoryArr) {
-            let userProjection = { name: 1, email: 1, phone: 1, }; 
-            let UserObj = await Users.findById(pointHistory.userId,userProjection).lean().exec();
+            let userProjection = { name: 1, email: 1, phone: 1 };
+            let UserObj = await Users.findById(pointHistory.userId, userProjection).lean().exec();
             pointHistory.user = UserObj;
         }
 
@@ -224,6 +225,7 @@ export const pointsRedeem = async (req, res, next) => {
         };
 
         await Users.findByIdAndUpdate(req.user.userId, userPoints).exec();
+
         if (req.body.type && req.body.type == "CASH") {
             let CouponObj = {
                 value: points,
@@ -235,6 +237,18 @@ export const pointsRedeem = async (req, res, next) => {
             res.status(200).json({ message: "Points successfully cashed", success: true, data: CouponRes });
         } else {
             res.status(200).json({ message: "Points successfully redeem", success: true });
+            if (req.body.type === "BANK") {
+                await sendWhatsAppMessageForBankTransfer(
+                    userObj.name,
+                    points,
+                    additionalInfo.transferDetails?.accountName,
+                    additionalInfo.transferDetails?.accountNo,
+                    additionalInfo.transferDetails?.ifsc,
+                    additionalInfo.transferDetails?.banktype
+                );
+            } else if (req.body.type === "UPI") {
+                await sendWhatsAppMessageForUPITransfer(userObj.name, points, additionalInfo.transferDetails?.upiId);
+            }
         }
         console.log(additionalInfo, "additionalInfo");
         await createPointlogs(req.user.userId, points, pointTransactionType.DEBIT, pointDescription, mobileDescription, "pending", additionalInfo);

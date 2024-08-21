@@ -56,7 +56,7 @@ let User = mongoose.Schema(
         // visitingCard: { type: String },
         fcmToken: { type: String, required: true },
         refCode: { type: String, unique: true },
-   
+       
         // address: {
         //     type: {
         //         type: String,
