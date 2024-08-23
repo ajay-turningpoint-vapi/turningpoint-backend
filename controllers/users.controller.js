@@ -16,7 +16,7 @@ import { createPointlogs } from "./pointHistory.controller";
 import ReferralRewards from "../models/referralRewards.model";
 import { sendNotificationMessage } from "../middlewares/fcm.middleware";
 import Geofence from "../models/geoFence.modal";
-import { generateRandomWord, randomNumberGenerator, sendWhatsAppMessage } from "../helpers/utils";
+import { generateRandomWord, randomNumberGenerator, sendWhatsAppMessage, sendWhatsAppMessageForOTP } from "../helpers/utils";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
@@ -47,8 +47,7 @@ export const phoneOtpgenerate = async (req, res) => {
     const otpEntry = new otpModel({ phone, otp, expiresAt });
     await otpEntry.save();
 
-    // TODO: Send OTP to phoneNumber via SMS service
-    // Example: sendOtp(phoneNumber, otp);
+    sendWhatsAppMessageForOTP(`91${phone}`, `OTP is ${otp}`);
 
     res.status(200).json({ message: "OTP sent to phone number" });
 };
@@ -338,7 +337,7 @@ export const registerUser = async (req, res, next) => {
         sendWhatsAppMessage("newuser", "918975944936", newUser.name, newUser.phone, newUser.email);
         res.status(200).json({ message: "User Created", data: newUser, token: accessToken, status: true });
     } catch (error) {
-        console.error("register user",error);
+        console.error("register user", error);
         next(error);
     }
 };
