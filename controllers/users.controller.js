@@ -681,7 +681,7 @@ export const getAllGeofence = async (req, res) => {
 };
 
 export const updateUserProfile = async (req, res, next) => {
-    console.log(req.body);
+    console.log("kyc", req.body);
 
     try {
         let userObj = await Users.findById(req.user.userId).exec();
@@ -699,7 +699,7 @@ export const updateUserProfile = async (req, res, next) => {
             req.body.isActive = false;
         }
 
-        if (req.body.bankDetails !== null && req.body.bankDetails.length > 0) {
+        if (req.body.bankDetails && req.body.bankDetails.length > 0) {
             let bankDetails = [
                 {
                     banktype: req.body.bankDetails[0].banktype,
@@ -724,14 +724,13 @@ export const updateUserProfile = async (req, res, next) => {
 };
 
 export const updateUserProfileImage = async (req, res, next) => {
+    console.log("profile", req.body);
     try {
         let userObj = await Users.findById(req.user.userId).exec();
         if (!userObj) {
             throw new Error("User Not found");
         }
-        if (req.body.image) {
-            req.body.image = await storeFileAndReturnNameBase64(req.body.image);
-        }
+
         userObj = await Users.findByIdAndUpdate(req.user.userId, req.body).exec();
         res.status(200).json({ message: "Profile Image Updated Successfully", success: true });
     } catch (err) {

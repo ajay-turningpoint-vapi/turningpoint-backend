@@ -36,19 +36,16 @@ router.post("/upload", (req, res, next) => {
     if (req.file && req.file.size > 20 * 1024 * 1024) {
         return res.status(400).json({ error: "File size exceeds the limit (20 MB)" });
     }
-   
+
     upload.array("images")(req, res, (err) => {
         if (err instanceof multer.MulterError) {
-           
             return res.status(400).json({ error: err.message });
         } else if (err) {
-           
             return res.status(500).json({ error: "Internal Server Error" });
         }
 
-     
         const fileUrls = req.files.map((file) => `${cloudFrontDomain}/${file.key}`);
-        res.status(200).json( fileUrls );
+        res.status(200).json(fileUrls); 
     });
 });
 
