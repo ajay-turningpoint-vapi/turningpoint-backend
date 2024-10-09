@@ -19,9 +19,7 @@ let User = mongoose.Schema(
             phone: String,
         },
 
-        // addressLine: String,
-        // country: String,
-        // stateName: String,
+        
         pincode: String,
 
         password: { type: String },

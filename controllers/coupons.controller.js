@@ -211,19 +211,29 @@ export const deleteCouponById = async (req, res, next) => {
         next(error);
     }
 };
+
 export const getActiveCoupons = async (req, res, next) => {
     try {
+        let query = {};
         let todayStart = new Date();
         todayStart.setHours(0, 0, 0);
 
-        let CouponArr = await Coupon.find({ maximumNoOfUsersAllowed: 1 }).lean().exec();
-        // console.log(productArr, "ppppppppp")
-        res.status(200).json({ message: "products", data: CouponArr, success: true });
+        // Find coupons based on maximumNoOfUsersAllowed and productName (if provided)
+        query.maximumNoOfUsersAllowed = 1
+
+        if (req.query.productName) {
+            query.productName = req.query.productName; // Add productName to query if provided
+        }
+
+        let CouponArr = await Coupon.find(query).lean().exec();
+
+        res.status(200).json({ message: "active coupons", data: CouponArr, success: true });
     } catch (error) {
         console.error(error);
         next(error);
     }
 };
+
 export const getActiveCouponsExcel = async (req, res, next) => {
     try {
         let todayStart = new Date();
@@ -325,7 +335,6 @@ export const addMultipleCoupons = async (req, res, next) => {
             throw new Error("number of coupons must be less than total coupons");
         }
         let couponArray = [];
-        let forLoopCouponArray = [];
         for (const coupon of coupons) {
             while (parseInt(coupon.count) !== 0) {
                 let newObject = _.cloneDeep(coupon);
@@ -352,23 +361,6 @@ export const addMultipleCoupons = async (req, res, next) => {
             finalCouponsArray.push(couponData);
             couponArray.splice(element, 1);
         }
-        // console.log(finalCouponsArray, "COUPON_MULTIPLE_ADD_SUCCESS");
-        // const totalValueAndCount = finalCouponsArray.reduce(
-        //     (acc, coupon) => {
-        //         return {
-        //             value: acc.value + parseInt(coupon.value),
-        //             count: acc.count + parseInt(coupon.count),
-        //         };
-        //     },
-        //     { value: 0, count: 0 }
-        // );
-
-        // console.log(req.body.coupons);
-
-        // console.log("forLoopCouponArray", forLoopCouponArray, "length", forLoopCouponArray.length);
-        // if (totalValueAndCount.value !== parseInt(req.body.amount) || totalValueAndCount.count !== parseInt(req.body.count)) {
-        //     throw new Error("Total value and count mismatch");
-        // }
 
         let result = await Coupon.insertMany(finalCouponsArray);
         let tempArr = _.cloneDeep(result);
