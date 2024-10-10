@@ -172,9 +172,11 @@ export const refreshToken = async (req, res) => {
     try {
         // Verify the refresh token
         const decoded = jwt.verify(refreshToken, CONFIG.JWT_REFERSH_TOKEN_SECRET);
-        const { uid } = decoded;
+        const { userId } = decoded;
+        const userIdObjectId = mongoose.Types.ObjectId(userId);
+
         // Check if the refresh token exists in the database
-        const storedToken = await Token.findOne({ uid }).exec();
+        const storedToken = await Token.findOne({ userId: userIdObjectId }).exec();
         if (!storedToken || storedToken.token !== refreshToken) {
             return res.status(401).json({ message: "Invalid or expired refresh token", status: false });
         }
