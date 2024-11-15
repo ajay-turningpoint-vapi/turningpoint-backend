@@ -23,9 +23,9 @@ export const authorizeJwt = async (req, res, next) => {
         // Fetch user object and check if active
         const userObj = await User.findById(decoded.userId).exec();
         
-        if (!userObj || !userObj.isActive) {
-            return res.status(202).json({ message: "Admin locked you out of the app",valid:true}); // User inactive or locked
-        }
+        // if (!userObj || !userObj.isActive) {
+        //     return res.status(202).json({ message: "Admin locked you out of the app",valid:true}); 
+        // }
 
         req.user.userObj = userObj;
         next();

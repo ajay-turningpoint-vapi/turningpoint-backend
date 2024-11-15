@@ -204,7 +204,7 @@ export const pointsRedeem = async (req, res, next) => {
         }
 
         if (!req.body.type) {
-            throw new Error("Transfer type  required like UPI or Bank");
+            throw new Error("Transfer type required like UPI or Bank");
         }
 
         if (!req.body.transferDetails) {

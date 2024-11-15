@@ -50,17 +50,15 @@ import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware"
 
 let router = express.Router();
 
-router.post("/google-signIn", googleLoginTest);
+router.post("/google-signIn", googleLogin);
 router.post("/refresh-token", refreshToken);
 router.get("/check-token", authorizeJwt, (req, res) => res.json({ valid: true }));
 router.post("/register", registerUser);
 router.get("/applyReward/:id", authorizeJwt, applyRewards);
 router.get("/getUserReferralsReportById/:id", getUserReferralsReportById);
 router.get("/getUserReferralsReports", getUsersReferralsReport);
-
 router.post("/login", login);
 router.post("/checkPhoneNumber", checkPhoneNumber);
-
 router.post("/generateOtp", phoneOtpgenerate);
 router.post("/verifyOtp", verifyOtp);
 router.post("/checkRefCode", checkRefCode);

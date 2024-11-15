@@ -604,6 +604,7 @@ export const deleteById = async (req, res, next) => {
     }
 };
 
+
 export const joinContest = async (req, res, next) => {
     try {
         let ContestObj = await Contest.findById(req.params.id).exec();
@@ -714,7 +715,80 @@ export const joinContestByCoupon1 = async (req, res, next) => {
         next(err);
     }
 };
+
+
+export const autoJoinContest = async (contestId, userId) => {
+    try {
+        let ContestObj = await Contest.findById(contestId).exec();
+        
+        if (!ContestObj) throw { status: 400, message: "Contest Not Found" };
+
+        let UserObj = await userModel.findById(userId).lean().exec();
+        if (!UserObj) throw { status: 400, message: "User Not Found" };
+
+        let points = ContestObj.points;
+
+        // Check if user has sufficient points
+        if (UserObj.points < points) {
+            throw { status: 400, message: "Insufficient balance" };
+        }
+
+        // Create entry for user's join
+        let userContestObj = {
+            contestId: ContestObj._id,
+            userId: UserObj._id,
+            userJoinStatus: true, // Set userJoinStatus to true when joining
+        };
+
+        // Save user's join entry
+        await userContest.create(userContestObj);
+
+        // Deduct points from user's balance
+        let updatedUserPoints = UserObj.points - points;
+        await userModel.findByIdAndUpdate(userId, { points: updatedUserPoints });
+        await Contest.findByIdAndUpdate(contestId, { $inc: { userJoin: 1 } });
+
+        // Log point transaction
+        let pointDescription = ContestObj.name + " Contest Joined with " + points + " Points";
+        let mobileDescription = "Contest";
+        await createPointlogs(userId, points, pointTransactionType.DEBIT, pointDescription, mobileDescription, "success");
+        await activityLogsModel.create({
+            userId,
+            type: "Joined Contest",
+        });
+
+        return { message: "Auto-joined contest successfully", success: true };
+    } catch (error) {
+        console.error(error);
+        throw error;
+    }
+};
+
 export const joinContestByCoupon = async (req, res, next) => {
+    try {
+        const { id: contestId } = req.params;
+        const userId = req.user.userId;
+        const repeatCount = parseInt(req.body.count) || 1;
+        let userJoinCount = 0;
+
+        for (let i = 0; i < repeatCount; i++) {
+            try {
+                await autoJoinContest(contestId, userId);
+                userJoinCount += 1;
+            } catch (error) {
+                break; // Stop if the user cannot join anymore
+            }
+        }
+
+        res.status(200).json({ message: "Contest Joined Successfully", success: true, count: userJoinCount });
+    } catch (err) {
+        next(err);
+    }
+};
+
+
+
+export const joinContestByCouponOldButWorking = async (req, res, next) => {
     try {
         let ContestObj = await Contest.findById(req.params.id).exec();
         if (!ContestObj) throw { status: 400, message: "Contest Not Found" };
@@ -776,6 +850,7 @@ export const joinContestByCoupon = async (req, res, next) => {
         next(err);
     }
 };
+
 export const getAllContest = async (req, res) => {
     try {
         // Find all contests

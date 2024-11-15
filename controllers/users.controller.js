@@ -16,6 +16,7 @@ import { createPointlogs } from "./pointHistory.controller";
 import ReferralRewards from "../models/referralRewards.model";
 import { sendNotificationMessage } from "../middlewares/fcm.middleware";
 import Geofence from "../models/geoFence.modal";
+import { format } from "date-fns";
 import { generateRandomWord, randomNumberGenerator, sendWhatsAppMessage, sendWhatsAppMessageForOTP } from "../helpers/utils";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
@@ -23,6 +24,7 @@ import mongoose from "mongoose";
 import { CONFIG } from "../helpers/Config";
 import axios from "axios";
 import otpModel from "../models/otp.model";
+import { autoJoinContest } from "./contest.controller";
 const geolib = require("geolib");
 const AWS = require("aws-sdk");
 
@@ -76,7 +78,8 @@ export const verifyOtp = async (req, res) => {
 
     res.status(200).json({ message: "OTP verified successfully" });
 };
-export const googleLoginTest = async (req, res) => {
+
+export const googleLoginTestOldButWorking = async (req, res) => {
     const { idToken, fcmToken } = req.body;
 
     if (!idToken) {
@@ -139,7 +142,7 @@ export const googleLoginTest = async (req, res) => {
                 message: "Login successful",
                 status: true,
                 token: accessToken,
-                rerefreshToken: refreshToken,
+                refreshToken: refreshToken,
             });
         } else {
             res.status(200).json({ message: "User not registered", status: false });
@@ -156,6 +159,87 @@ export const googleLoginTest = async (req, res) => {
             errorMessage = "Unauthorized. Invalid or expired token.";
         } else if (error.message.includes("User not registered")) {
             statusCode = 404;
+        }
+
+        res.status(statusCode).json({ error: errorMessage, status: false });
+    }
+};
+
+export const googleLogin = async (req, res) => {
+    const { idToken, fcmToken } = req.body;
+
+    if (!idToken) {
+        return res.status(400).json({ message: "ID token is required", status: false });
+    }
+
+    try {
+        const { uid } = await admin.auth().verifyIdToken(idToken);
+
+        const existingUser = await Users.findOne({ uid }).exec();
+        if (existingUser) {
+            const previousFcmToken = existingUser.fcmToken;
+
+            if (previousFcmToken !== fcmToken) {
+                const title = "Session Terminated";
+                const body = "Account was logged in on another device";
+                await sendNotificationMessage(existingUser._id, title, body, "session_expired");
+            }
+
+            await Token.deleteMany({ uid });
+
+            const accessToken = await generateAccessJwt({
+                userId: existingUser._id,
+                role: existingUser.role,
+                name: existingUser.name,
+                phone: existingUser.phone,
+                email: existingUser.email,
+                uid: existingUser.uid,
+                fcmToken: fcmToken,
+            });
+
+            const refreshToken = await generateRefreshJwt({
+                userId: existingUser._id,
+                role: existingUser.role,
+                name: existingUser.name,
+                phone: existingUser.phone,
+                email: existingUser.email,
+                uid: existingUser.uid,
+                fcmToken: fcmToken,
+            });
+
+            await Token.create({ uid: existingUser.uid, userId: existingUser._id, token: accessToken, refreshToken, fcmToken });
+
+            try {
+                existingUser.fcmToken = fcmToken;
+                await existingUser.save();
+            } catch (err) {
+                console.error("Error updating FCM token:", err);
+            }
+
+            if (previousFcmToken !== fcmToken) {
+                const title = "Session Terminated";
+                const body = "You have been logged out from another device";
+                await sendNotificationMessage(existingUser._id, title, body, "session_expiry_notification");
+            }
+
+            res.status(200).json({
+                message: "Login successful",
+                status: true,
+                token: accessToken,
+                refreshToken,
+            });
+        } else {
+            res.status(404).json({ message: "User not registered", status: false });
+        }
+    } catch (error) {
+        console.error("Error during Google login:", error);
+
+        let statusCode = 500;
+        let errorMessage = "Internal Server Error";
+
+        if (error.code === "auth/invalid-id-token" || error.code === "auth/id-token-expired") {
+            statusCode = 401;
+            errorMessage = "Unauthorized. Invalid or expired token.";
         }
 
         res.status(statusCode).json({ error: errorMessage, status: false });
@@ -217,7 +301,7 @@ export const refreshToken = async (req, res) => {
     }
 };
 
-export const googleLogin = async (req, res) => {
+export const googleLoginOld = async (req, res) => {
     try {
         const { idToken, fcmToken } = req.body;
         console.log(req.body);
@@ -814,7 +898,7 @@ const updateUserOnlineStatusWithRetry = async (userId, isOnline, retries = 3) =>
 
 export const updateUserOnlineStatus = async (req, res) => {
     try {
-        const { userId } = req.user;
+        const { userId } = req?.user;
         const { isOnline } = req.body;
 
         if (typeof isOnline !== "boolean") {
@@ -996,6 +1080,98 @@ export const getUserActivityAnalysis = async (req, res, next) => {
     }
 };
 
+export const getUserByIdwithDateCheck = async (req, res, next) => {
+    try {
+        let userObj = await Users.findById(req.params.id).lean().exec();
+        if (!userObj) {
+            return res.status(404).json({ message: "User not found", success: false });
+        }
+        let contestParticipationCount = await UserContest.find({ userId: userObj._id }).count().exec();
+        let contestsParticipatedInCount = await UserContest.find({ userId: userObj._id }).distinct("contestId").exec();
+        let contestUniqueWonCount = await UserContest.find({ userId: userObj._id, status: "win" }).distinct("contestId").exec();
+        let contestWonCount = await UserContest.find({ userId: userObj._id, status: "win" }).count().exec();
+
+        userObj.contestParticipationCount = contestParticipationCount;
+        userObj.contestsParticipatedInCount = contestsParticipatedInCount.length;
+        userObj.contestWonCount = contestWonCount;
+        userObj.contestUniqueWonCount = contestUniqueWonCount?.length ? contestUniqueWonCount?.length : 0;
+
+        if (userObj.points >= 100) {
+            console.log("Contest block initiated.");
+
+            // Get the current date and time
+            const currentDateTime = new Date();
+
+            try {
+                // Find contests where the current date and time falls between the start and end date-time
+                const openContests = await Contest.find({
+                    $expr: {
+                        $and: [
+                            {
+                                $lte: [
+                                    {
+                                        $dateFromString: {
+                                            dateString: {
+                                                $concat: [{ $dateToString: { format: "%Y-%m-%d", date: "$startDate" } }, "T", "$startTime"],
+                                            },
+                                        },
+                                    },
+                                    currentDateTime,
+                                ],
+                            },
+                            {
+                                $gte: [
+                                    {
+                                        $dateFromString: {
+                                            dateString: {
+                                                $concat: [{ $dateToString: { format: "%Y-%m-%d", date: "$endDate" } }, "T", "$endTime"],
+                                            },
+                                        },
+                                    },
+                                    currentDateTime,
+                                ],
+                            },
+                        ],
+                    },
+                }).exec();
+
+                console.log("Open contests found:", openContests.length);
+
+                // Check if any open contest is found
+                if (openContests.length > 0) {
+                    const contestId = openContests[0]._id;
+
+                    console.log("Joining contest with ID:", contestId);
+
+                    // Fetch the contest object by ID
+                    const contestObj = await Contest.findById(contestId).exec();
+
+                    if (!contestObj) {
+                        userObj.autoJoinStatus = "Contest not found";
+                        console.log(userObj.autoJoinStatus);
+                    } else {
+                        // Auto-join the contest
+                        await autoJoinContest(contestId, userObj._id);
+                        userObj.autoJoinStatus = "User auto-joined the contest";
+                        console.log(userObj.autoJoinStatus);
+                    }
+                } else {
+                    userObj.autoJoinStatus = "No open contests found for this time";
+                    console.log(userObj.autoJoinStatus);
+                }
+            } catch (error) {
+                userObj.autoJoinStatus = "Auto-join failed: " + error.message;
+                console.error(userObj.autoJoinStatus);
+            }
+        }
+
+        res.status(200).json({ message: "User found", data: userObj, success: true });
+    } catch (error) {
+        console.error(error);
+        next(error);
+    }
+};
+
 export const getUserById = async (req, res, next) => {
     try {
         let userObj = await Users.findById(req.params.id).lean().exec();
@@ -1006,10 +1182,37 @@ export const getUserById = async (req, res, next) => {
         let contestsParticipatedInCount = await UserContest.find({ userId: userObj._id }).distinct("contestId").exec();
         let contestUniqueWonCount = await UserContest.find({ userId: userObj._id, status: "win" }).distinct("contestId").exec();
         let contestWonCount = await UserContest.find({ userId: userObj._id, status: "win" }).count().exec();
+
         userObj.contestParticipationCount = contestParticipationCount;
         userObj.contestsParticipatedInCount = contestsParticipatedInCount.length;
         userObj.contestWonCount = contestWonCount;
         userObj.contestUniqueWonCount = contestUniqueWonCount?.length ? contestUniqueWonCount?.length : 0;
+
+        if (userObj.points >= 100) {
+            const contestId = req.query.contestId;
+        
+            try {
+                if (contestId) {
+                    // Fetch the contest by the provided contestId
+                    const contestObj = await Contest.findById(contestId).exec();
+
+                    if (!contestObj) {
+                        userObj.autoJoinStatus = "Contest not found";
+                    } else {
+                        // Auto-join the contest
+                        await autoJoinContest(contestId, userObj._id);
+                        userObj.autoJoinStatus = "User auto-joined the contest";
+                    }
+                } else {
+                    userObj.autoJoinStatus = "No contest ID provided";
+                    console.log(userObj.autoJoinStatus);
+                }
+            } catch (error) {
+                userObj.autoJoinStatus = "Auto-join failed: " + error.message;
+                console.error(userObj.autoJoinStatus);
+            }
+        }
+
         res.status(200).json({ message: "User found", data: userObj, success: true });
     } catch (error) {
         console.error(error);
@@ -1028,6 +1231,8 @@ export const deleteUser = async (req, res, next) => {
         next(error);
     }
 };
+
+
 
 //ADMIN============
 
@@ -1060,8 +1265,8 @@ export const loginAdmin = async (req, res, next) => {
             const passwordCheck = await comparePassword(adminObj.password, req.body.password);
             if (passwordCheck) {
                 let accessToken = await generateAccessJwt({ userId: adminObj._id, role: rolesObj.ADMIN, user: { name: adminObj.name, email: adminObj.email, phone: adminObj.phone, _id: adminObj._id } });
-                let refreshToken = await generateRefreshJwt({ userId: adminObj._id, role: rolesObj.ADMIN, user: { name: adminObj.name, email: adminObj.email, phone: adminObj.phone, _id: adminObj._id } });
-                res.status(200).json({ message: "LogIn Successfull", token: accessToken, refreshToken, success: true });
+                // let refreshToken = await generateRefreshJwt({ userId: adminObj._id, role: rolesObj.ADMIN, user: { name: adminObj.name, email: adminObj.email, phone: adminObj.phone, _id: adminObj._id } });
+                res.status(200).json({ message: "LogIn Successfull", token: accessToken });
             } else {
                 throw { status: 401, message: "Invalid Password" };
             }
