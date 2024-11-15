@@ -1190,7 +1190,7 @@ export const getUserById = async (req, res, next) => {
 
         if (userObj.points >= 100) {
             const contestId = req.query.contestId;
-        
+
             try {
                 if (contestId) {
                     // Fetch the contest by the provided contestId
@@ -1201,6 +1201,7 @@ export const getUserById = async (req, res, next) => {
                     } else {
                         // Auto-join the contest
                         await autoJoinContest(contestId, userObj._id);
+                        userObj = await Users.findById(req.params.id).lean().exec();
                         userObj.autoJoinStatus = "User auto-joined the contest";
                     }
                 } else {
@@ -1231,8 +1232,6 @@ export const deleteUser = async (req, res, next) => {
         next(error);
     }
 };
-
-
 
 //ADMIN============
 

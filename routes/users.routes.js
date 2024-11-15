@@ -49,7 +49,6 @@ import { authorizeJwt } from "../middlewares/auth.middleware";
 import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
 
 let router = express.Router();
-
 router.post("/google-signIn", googleLogin);
 router.post("/refresh-token", refreshToken);
 router.get("/check-token", authorizeJwt, (req, res) => res.json({ valid: true }));
