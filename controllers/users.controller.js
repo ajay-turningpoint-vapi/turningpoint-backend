@@ -1188,30 +1188,62 @@ export const getUserById = async (req, res, next) => {
         userObj.contestWonCount = contestWonCount;
         userObj.contestUniqueWonCount = contestUniqueWonCount?.length ? contestUniqueWonCount?.length : 0;
 
-        if (userObj.points >= 100) {
+        // if (userObj.points >= 100) {
+        //     const contestId = req.query.contestId;
+
+        //     try {
+        //         if (contestId) {
+        //             // Fetch the contest by the provided contestId
+        //             const contestObj = await Contest.findById(contestId).exec();
+
+        //             if (!contestObj) {
+        //                 userObj.autoJoinStatus = "Contest not found";
+        //             } else {
+
+        //                 // Auto-join the contest
+        //                 await autoJoinContest(contestId, userObj._id);
+        //                 userObj = await Users.findById(req.params.id).lean().exec();
+        //                 userObj.autoJoinStatus = "User auto-joined the contest";
+        //             }
+        //         } else {
+        //             userObj.autoJoinStatus = "No contest ID provided";
+        //             console.log(userObj.autoJoinStatus);
+        //         }
+        //     } catch (error) {
+        //         userObj.autoJoinStatus = "Auto-join failed: " + error.message;
+        //         console.error(userObj.autoJoinStatus);
+        //     }
+        // }
+
+        if (req.query.contestId) {
             const contestId = req.query.contestId;
 
             try {
-                if (contestId) {
-                    // Fetch the contest by the provided contestId
-                    const contestObj = await Contest.findById(contestId).exec();
+                // Fetch the contest by the provided contestId
+                const contestObj = await Contest.findById(contestId).exec();
 
-                    if (!contestObj) {
-                        userObj.autoJoinStatus = "Contest not found";
-                    } else {
+                if (!contestObj) {
+                    userObj.autoJoinStatus = "Contest not found";
+                } else {
+                    // Check if the user has enough points to join the contest
+                    const requiredPoints = contestObj.points || 0; // Default to 0 if no points specified
+
+                    if (userObj.points >= requiredPoints) {
                         // Auto-join the contest
                         await autoJoinContest(contestId, userObj._id);
                         userObj = await Users.findById(req.params.id).lean().exec();
                         userObj.autoJoinStatus = "User auto-joined the contest";
+                    } else {
+                        userObj.autoJoinStatus = `Not enough points to join the contest. Required: ${requiredPoints}, Available: ${userObj.points}`;
                     }
-                } else {
-                    userObj.autoJoinStatus = "No contest ID provided";
-                    console.log(userObj.autoJoinStatus);
                 }
             } catch (error) {
                 userObj.autoJoinStatus = "Auto-join failed: " + error.message;
                 console.error(userObj.autoJoinStatus);
             }
+        } else {
+            userObj.autoJoinStatus = "No contest ID provided";
+            console.log(userObj.autoJoinStatus);
         }
 
         res.status(200).json({ message: "User found", data: userObj, success: true });
@@ -1220,6 +1252,24 @@ export const getUserById = async (req, res, next) => {
         next(error);
     }
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 export const deleteUser = async (req, res, next) => {
     try {

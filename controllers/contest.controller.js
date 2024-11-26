@@ -1138,6 +1138,8 @@ export const currentContest = async (req, res, next) => {
     }
 };
 
+
+
 export const getCurrentContestRewards = async (req, res, next) => {
     try {
         // Get the current date and time
@@ -1148,7 +1150,7 @@ export const getCurrentContestRewards = async (req, res, next) => {
             endDate: { $lte: currentDateTime },
         })
             .select("name image") // Select both the contest name and image
-            .sort({ endDate: -1 }) // Sort in descending order to get the most recent contest first
+            .sort({ endDate: -1, endTime: -1 }) // Sort in descending order to get the most recent contest first
             .lean()
             .exec();
 
@@ -1190,7 +1192,7 @@ export const getPreviousContestRewards = async (req, res, next) => {
             endDate: { $lte: currentDateTime },
         })
             .select("name")
-            .sort({ endDate: -1 }) // Sort in descending order to get the most recent contest first
+            .sort({ endDate: -1, endTime: -1 }) // Sort in descending order to get the most recent contest first
             .lean()
             .exec();
 
@@ -1204,9 +1206,10 @@ export const getPreviousContestRewards = async (req, res, next) => {
             endDate: { $lt: currentDateTime },
             _id: { $ne: currentContest._id }, // Exclude the ID of the current contest
         })
-            .sort({ endDate: -1 }) // Sort in descending order to get the second most recent contest first
+            .sort({ endDate: -1, endTime: -1 }) // Sort in descending order to get the second most recent contest first
             .lean()
             .exec();
+        console.log("previousContest".previousContest);
 
         if (!previousContest) {
             return res.status(404).json({ message: "No previous closed contest found", success: false });
