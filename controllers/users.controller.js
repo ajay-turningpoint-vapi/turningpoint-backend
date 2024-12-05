@@ -39,19 +39,23 @@ const generateOtp = () => {
 };
 
 export const phoneOtpgenerate = async (req, res) => {
-    const { phone } = req.body;
+    try {
+        const { phone } = req.body;
 
-    // Generate OTP
-    const otp = generateOtp();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+        // Generate OTP
+        const otp = generateOtp();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-    // Save OTP to database
-    const otpEntry = new otpModel({ phone, otp, expiresAt });
-    await otpEntry.save();
+        // Save OTP to database
+        const otpEntry = new otpModel({ phone, otp, expiresAt });
+        await otpEntry.save();
 
-    sendWhatsAppMessageForOTP(`91${phone}`, `OTP is ${otp}`);
+        sendWhatsAppMessageForOTP(`91${phone}`, otp);
 
-    res.status(200).json({ message: "OTP sent to phone number" });
+        res.status(200).json({ message: "OTP sent to phone number" });
+    } catch (err) {
+        console.log(`ERROR : ${err}`);
+    }
 };
 
 export const verifyOtp = async (req, res) => {
@@ -229,7 +233,7 @@ export const googleLogin = async (req, res) => {
                 refreshToken,
             });
         } else {
-            res.status(404).json({ message: "User not registered", status: false });
+            res.status(200).json({ message: "User not registered", status: false });
         }
     } catch (error) {
         console.error("Error during Google login:", error);
@@ -1252,24 +1256,6 @@ export const getUserById = async (req, res, next) => {
         next(error);
     }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 export const deleteUser = async (req, res, next) => {
     try {

@@ -318,9 +318,61 @@ export async function sendWhatsAppMessageForOTP(phone, otp) {
                 "Content-Type": "application/json",
             },
         });
-
         return response.data;
     } catch (error) {
         console.error("Error sending WhatsApp message:", error);
     }
 }
+
+
+// export async function sendWhatsAppMessageForOTP(phone, otp) {
+//     const payload = {
+//         integrated_number: "918200025803", // Replace with your integrated number
+//         content_type: "template",
+//         payload: {
+//             messaging_product: "whatsapp",
+//             type: "template",
+//             template: {
+//                 name: "newotpgenerationloyapp", // Replace with your template name
+//                 language: {
+//                     code: "en_US", // Language and policy should match your template setup
+//                     policy: "deterministic",
+//                 },
+//                 namespace: "19289588_241c_4c3e_ae9c_c7a527b1b4d2", // Replace with your template namespace
+//                 to_and_components: [
+//                     {
+//                         to: [phone], // Recipient phone number(s) in international format
+//                         components: {
+//                             body_1: {
+//                                 type: "text",
+//                                 value: otp, // Dynamic value for the body_1 variable
+//                             },
+//                             button_1: {
+//                                 subtype: "url",
+//                                 type: "text",
+//                                 value:otp, // Replace with your button URL or text
+//                             },
+//                         },
+//                     },
+//                 ],
+//             },
+//         },
+//     };
+
+//     try {
+//         const response = await axios.post(
+//             "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/",
+//             payload,
+//             {
+//                 headers: {
+//                     authkey: `418451AzKt9qoMmlL664c674fP1`, // Replace with your MSG91 API key
+//                     "Content-Type": "application/json",
+//                 },
+//             }
+//         );
+//         return response.data;
+//     } catch (error) {
+//         console.error("Error sending WhatsApp message:", error.response?.data || error.message);
+//         throw error; // Optionally, rethrow the error for further handling
+//     }
+// }
