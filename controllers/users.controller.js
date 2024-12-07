@@ -1195,22 +1195,32 @@ export const getUserById = async (req, res, next) => {
 
         if (req.query.contestId && req.query.contestId !== 'null') {
             const contestId = req.query.contestId;
-
+        
             try {
                 // Fetch the contest by the provided contestId
                 const contestObj = await Contest.findById(contestId).exec();
-
+        
                 if (!contestObj) {
                     userObj.autoJoinStatus = "Contest not found";
                 } else {
                     // Check if the user has enough points to join the contest
                     const requiredPoints = contestObj.points || 0; // Default to 0 if no points specified
-
+        
                     if (userObj.points >= requiredPoints) {
-                        // Auto-join the contest
-                        await autoJoinContest(contestId, userObj._id);
+                        const joinCount = Math.floor(userObj.points / requiredPoints); // Calculate how many times user can join
+        
+                        for (let i = 0; i < joinCount; i++) {
+                            await autoJoinContest(contestId, userObj._id);
+                        }
+        
+                        // Deduct points after joining the contest
+                        const totalPointsUsed = joinCount * requiredPoints;
+                        userObj.points -= totalPointsUsed;
+                        await Users.updateOne({ _id: userObj._id }, { points: userObj.points });
+        
+                        // Refresh user data
                         userObj = await Users.findById(req.params.id).lean().exec();
-                        userObj.autoJoinStatus = "User auto-joined the contest";
+                        userObj.autoJoinStatus = `User auto-joined the contest ${joinCount} times`;
                     } else {
                         userObj.autoJoinStatus = `Not enough points to join the contest. Required: ${requiredPoints}, Available: ${userObj.points}`;
                     }
@@ -1223,7 +1233,7 @@ export const getUserById = async (req, res, next) => {
             userObj.autoJoinStatus = "No contest ID provided";
             console.log(userObj.autoJoinStatus);
         }
-
+        
         res.status(200).json({ message: "User found", data: userObj, success: true });
     } catch (error) {
         console.error(error);
