@@ -172,7 +172,7 @@ export const checkContest = async (date, time) => {
 
         for (const user of userData) {
             try {
-                // await sendNotificationMessage(user._id, title, body, "contestResult");
+                await sendNotificationMessage(user._id, title, body, "contestResult");
 
                 console.log(`Notification sent to ${user._id}: ${title}: ${body}`);
             } catch (error) {
