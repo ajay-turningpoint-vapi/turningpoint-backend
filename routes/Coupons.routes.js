@@ -12,6 +12,7 @@ import {
     getCouponCount,
     getAllCouponsAnalytics,
     getActiveCouponsExcel,
+    getUsedCouponsforMap,
 } from "../controllers/coupons.controller";
 import { authorizeJwt } from "../middlewares/auth.middleware";
 
@@ -24,10 +25,11 @@ router.get("/getCouponsCount", getCouponCount);
 router.patch("/updateById/:id", updateCouponsById);
 router.delete("/deleteById/:id", deleteCouponById);
 router.get("/getActiveCoupons", getActiveCoupons);
+router.get("/getScannedCoupons", getUsedCouponsforMap);
 router.get("/getActiveCouponsQrZip", getActiveCouponsQrZip);
 router.get("/getActiveCouponsQrExcel", getActiveCouponsExcel);
 router.post("/addMultipleCoupons", addMultipleCoupons);
-router.get("/applyCoupon/:id", authorizeJwt, applyCoupon);
+router.post("/applyCoupon", authorizeJwt, applyCoupon);
 router.post("/generateCoupon", authorizeJwt, generateCoupon);
 
 export default router;

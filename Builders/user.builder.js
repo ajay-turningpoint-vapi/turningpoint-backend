@@ -41,6 +41,7 @@ export const UserList = (payload) => {
                 kycStatus: 1,
                 createdAt: 1,
                 isOnline: 1,
+                isBlocked: 1,
             },
         },
         { $sort: sortCondition },

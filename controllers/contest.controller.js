@@ -7,6 +7,9 @@ import { createPointlogs } from "./pointHistory.controller";
 import { pointTransactionType } from "./../helpers/Constants";
 import activityLogsModel from "../models/activityLogs.model";
 import { sendNotificationMessage } from "../middlewares/fcm.middleware";
+import { sendWhatsAppMessageContestWinners } from "../helpers/utils";
+import prizeModel from "../models/prize.model";
+import moment from "moment";
 let Contestintial = "TNPC";
 
 function subtractSeconds(timeString, secondsToSubtract) {
@@ -33,7 +36,82 @@ function subtractSeconds(timeString, secondsToSubtract) {
     return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
 }
 
+function addSeconds(timeString, secondsToAdd) {
+    // Split the time string into hours, minutes, and seconds
+    const [hours, minutes, seconds] = timeString.split(":").map(Number);
+
+    // Calculate total seconds
+    let totalSeconds = hours * 3600 + minutes * 60 + seconds;
+
+    // Add seconds to total seconds
+    totalSeconds += secondsToAdd;
+
+    // Calculate hours, minutes, and remaining seconds
+    const newHours = Math.floor(totalSeconds / 3600);
+    const remainingSeconds = totalSeconds % 3600;
+    const newMinutes = Math.floor(remainingSeconds / 60);
+    const newSeconds = remainingSeconds % 60;
+
+    // Format the new time
+    const formattedHours = String(newHours).padStart(2, "0");
+    const formattedMinutes = String(newMinutes).padStart(2, "0");
+    const formattedSeconds = String(newSeconds).padStart(2, "0");
+
+    return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
+}
+
 export const addContest = async (req, res, next) => {
+    try {
+        let foundUrl = await Contest.findOne({ name: req.body.name }).exec();
+        if (foundUrl) throw { status: 400, message: "Contest already registered" };
+
+        req.body.contestId = Contestintial + Math.floor(Date.now() / 1000) + (Math.random() + 1).toString(36).substring(7);
+        const timeString = req.body.endTime + ":00";
+        const numberOfPrizes = req.body?.prizeArr?.length || 0;
+        const newTime = addSeconds(timeString, numberOfPrizes * 30); // Changed to add seconds
+        console.log("endTime", timeString, "newTime", newTime);
+        req.body.antimationTime = newTime;
+
+        let ContestObj = await Contest(req.body).save();
+        if (req.body?.prizeArr && req.body?.prizeArr?.length > 0) {
+            let rank = 1;
+            for (const prize of req.body?.prizeArr) {
+                let prizeObj = {
+                    rank: parseInt(rank),
+                    contestId: ContestObj._id,
+                    name: prize.name,
+                    description: prize.description,
+                    image: prize.image,
+                };
+
+                console.log(prizeObj, "prize obj");
+
+                let prizeInstance = await Prize(prizeObj).save();
+                rank++;
+            }
+        }
+
+        // Send notifications to users
+        const users = await userModel.find();
+        await Promise.all(
+            users.map(async (user) => {
+                try {
+                    const title = "🎉 खुशखबरी: नया लकी ड्रा उपलब्ध है, अभी जुड़ें!";
+                    const body = `🏆 ये मौका हाथ से न जाने दें! लकी ड्रा में भाग लें और जीतें! 🎉`;
+                    await sendNotificationMessage(user._id, title, body, "luckydraw");
+                } catch (error) {
+                    console.error("Error sending notification for user:", user._id);
+                }
+            })
+        );
+
+        res.status(201).json({ message: "Contest Registered", success: true });
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const addContestold = async (req, res, next) => {
     try {
         let foundUrl = await Contest.findOne({ name: req.body.name }).exec();
         if (foundUrl) throw { status: 400, message: "Contest already registered" };
@@ -144,7 +222,7 @@ export const getContestById = async (req, res, next) => {
     }
 };
 
-export const getCurrentContest = async (req, res, next) => {
+export const getCurrentContest1 = async (req, res, next) => {
     try {
         let pipeline = [
             {
@@ -232,6 +310,127 @@ export const getCurrentContest = async (req, res, next) => {
         next(err);
     }
 };
+
+export const getCurrentContest = async (req, res, next) => {
+    try {
+        let pipeline = [
+            {
+                $addFields: {
+                    combinedEndDateTime: {
+                        $dateFromString: {
+                            dateString: {
+                                $concat: [
+                                    {
+                                        $dateToString: {
+                                            date: "$endDate",
+                                            format: "%Y-%m-%d", // Ensure it's in YYYY-MM-DD format
+                                        },
+                                    },
+                                    "T",
+                                    "$antimationTime", // Use animationTime, which should be in HH:mm:ss format
+                                ],
+                            },
+                            timezone: "Asia/Kolkata", // Assuming animationTime is in Asia/Kolkata time zone
+                        },
+                    },
+                },
+            },
+            {
+                $addFields: {
+                    status: {
+                        $cond: {
+                            if: {
+                                $gt: ["$combinedEndDateTime", new Date()],
+                            },
+                            then: "ACTIVE",
+                            else: "INACTIVE",
+                        },
+                    },
+                },
+            },
+            {
+                $match: req.query.admin
+                    ? {} // If admin, no filter on combinedEndDateTime
+                    : {
+                          combinedEndDateTime: {
+                              $gt: new Date(), // If not admin, filter only contests with future end dates
+                          },
+                      },
+            },
+            {
+                $sort: { combinedEndDateTime: 1 }, // Sort by end date and animation time in ascending order
+            },
+            {
+                $limit: 1, // Limit to the first result (nearest end date and animation time)
+            },
+        ];
+
+        let getCurrentContest = await Contest.aggregate(pipeline);
+
+        if (getCurrentContest.length > 0) {
+            // Convert combinedEndDateAnimationTime to Asia/Kolkata timezone first
+            let utcDate = moment(getCurrentContest[0].combinedEndDateAnimationTime); // UTC time
+            let istDate = utcDate.clone().utcOffset("+05:30"); // Convert to Asia/Kolkata (UTC +5:30)
+
+            // Fetch prize data for the current contest
+            let prizeContestArray = await Prize.find({ contestId: `${getCurrentContest[0]._id}` }).exec();
+            getCurrentContest[0].prizeArr = prizeContestArray;
+
+            // Check if the user has joined the current contest
+            if (req.user.userId) {
+                let userJoinStatus = await userContest.exists({
+                    contestId: getCurrentContest[0]._id,
+                    userId: req.user.userId,
+                    status: "join",
+                });
+                getCurrentContest[0].userJoinStatus = userJoinStatus != null;
+            }
+        }
+
+        // Respond with the modified JSON object containing information about the current contest and associated prize array
+        res.status(200).json({ message: "getCurrentContest", data: getCurrentContest, success: true });
+    } catch (err) {
+        next(err);
+    }
+};
+
+
+
+export const getOpenContests = async (req, res) => {
+    const date = "2024-12-20"; // The date to check
+    const time = "16-48"; // The time in HH-mm format (adjusting the seconds part for simplicity)
+
+    try {
+        // Use moment to parse the date and set the start and end of the day (UTC)
+        const startDate = moment(date).startOf('day').toDate();  // Start of the day (UTC)
+        const endDate = moment(date).endOf('day').toDate();      // End of the day (UTC)
+
+        // Adjust time format from "16-48" to "16:48" (HH:mm format) to match the database format
+        const formattedTime = time.replace("-", ":");
+
+        console.log("Checking contests for date and time:", startDate, endDate, formattedTime);
+
+        // Find contests that match criteria
+        const openContests = await Contest.find({
+            endTime: formattedTime,  // Match the endTime with the formatted time
+            endDate: { $gte: startDate, $lte: endDate }, // Match the endDate in the range of the given date (UTC)
+            status: "APPROVED",
+        }).exec();
+
+        console.log("openContests", openContests);
+
+        if (!openContests.length) {
+            return res.status(404).json({ message: "No contests found for the given time and date." });
+        }
+
+        return res.json({ contests: openContests });
+    } catch (err) {
+        console.error("Error fetching contests:", err);
+        return res.status(500).json({ message: "Server error." });
+    }
+};
+
+
 
 export const getContest = async (req, res, next) => {
     try {
@@ -604,7 +803,6 @@ export const deleteById = async (req, res, next) => {
     }
 };
 
-
 export const joinContest = async (req, res, next) => {
     try {
         let ContestObj = await Contest.findById(req.params.id).exec();
@@ -716,11 +914,10 @@ export const joinContestByCoupon1 = async (req, res, next) => {
     }
 };
 
-
 export const autoJoinContest = async (contestId, userId) => {
     try {
         let ContestObj = await Contest.findById(contestId).exec();
-        
+
         if (!ContestObj) throw { status: 400, message: "Contest Not Found" };
 
         let UserObj = await userModel.findById(userId).lean().exec();
@@ -785,8 +982,6 @@ export const joinContestByCoupon = async (req, res, next) => {
         next(err);
     }
 };
-
-
 
 export const joinContestByCouponOldButWorking = async (req, res, next) => {
     try {
@@ -1138,8 +1333,6 @@ export const currentContest = async (req, res, next) => {
     }
 };
 
-
-
 export const getCurrentContestRewards = async (req, res, next) => {
     try {
         // Get the current date and time
@@ -1147,7 +1340,7 @@ export const getCurrentContestRewards = async (req, res, next) => {
         // Find the most recent closed contest whose end date is before or equal to the current date
         const currentContest = await Contest.findOne({
             status: "CLOSED",
-            endDate: { $lte: currentDateTime },
+            endTime: { $lte: currentDateTime },
         })
             .select("name image") // Select both the contest name and image
             .sort({ endDate: -1, endTime: -1 }) // Sort in descending order to get the most recent contest first
@@ -1178,6 +1371,182 @@ export const getCurrentContestRewards = async (req, res, next) => {
     } catch (err) {
         // Handle errors
         next(err);
+    }
+};
+
+export const sendContestNotifications = async (req, res, next) => {
+    const { contestId } = req.params;
+
+    try {
+        // Step 1: Validate contestId
+        if (!contestId) {
+            return res.status(400).json({ message: "Contest ID is required", success: false });
+        }
+
+        // Step 2: Fetch the contest details
+        const contest = await Contest.findById(contestId).select("name").lean();
+        if (!contest) {
+            return res.status(404).json({ message: "Contest not found", success: false });
+        }
+        const contestName = contest.name;
+
+        // Step 3: Fetch distinct users participating in the contest
+        const distinctUserIds = await userContest.distinct("userId", { contestId });
+        if (!distinctUserIds.length) {
+            return res.status(404).json({ message: "No participants found for this contest", success: false });
+        }
+
+        // Step 4: Fetch user details
+        const users = await userModel
+            .find({ _id: { $in: distinctUserIds } })
+            .select("name phone")
+            .lean();
+
+        // Step 5: Fetch and sort winners by rank
+        const winners = await userContest
+            .find({ contestId, status: "win" })
+            .populate("userId", "name") // Populate winner names only
+            .sort({ rank: 1 })
+            .lean();
+
+        if (!winners.length) {
+            return res.status(404).json({ message: "No winners found for this contest", success: false });
+        }
+
+        // Step 6: Create the winners list message
+        const winnerMessages = winners.map((winner) => {
+            return `${winner.userId.name} is the winner of Rank ${winner.rank} in the ${contestName} contest! 🎉`;
+        });
+        const winnersList = winnerMessages.join("\n");
+
+        // Step 7: Send notifications to all users
+        const failedNotifications = [];
+        for (const user of users) {
+            try {
+                await sendWhatsAppMessageContestWinners(user.phone, contestName, winnersList);
+                console.log(`Notification sent to ${user.name} (${user.phone})`);
+            } catch (error) {
+                console.error(`Failed to send notification to ${user.name} (${user.phone}): ${error.message}`);
+                failedNotifications.push({
+                    user: user.name,
+                    phone: user.phone,
+                    error: error.message,
+                });
+            }
+        }
+
+        // Step 8: Return success or partial failure response
+        if (failedNotifications.length) {
+            return res.status(207).json({
+                message: "Some notifications failed to send. Please check the errors for more details.",
+                success: false,
+                failedNotifications,
+            });
+        }
+
+        return res.status(200).json({
+            message: "Notifications sent successfully to all users",
+            success: true,
+        });
+    } catch (err) {
+        console.error(`Error in sendContestNotifications: ${err.message}`);
+        next(err); // Pass the error to the error handler middleware
+    }
+};
+
+const getOrdinal = (num) => {
+    const suffixes = ["th", "st", "nd", "rd"];
+    const value = num % 100;
+    return num + (suffixes[(value - 20) % 10] || suffixes[value] || suffixes[0]);
+};
+
+// Function to convert text to camel case (for contest names)
+const toCamelCase = (str) => {
+    return str
+        .split(" ")
+        .map((word, index) => (index === 0 ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()))
+        .join("");
+};
+
+export const sendContestWinnerNotifications = async (req, res, next) => {
+    const { contestId } = req.params;
+
+    try {
+        // Step 1: Validate contestId
+        if (!contestId) {
+            return res.status(400).json({ message: "Contest ID is required", success: false });
+        }
+
+        // Step 2: Fetch the contest details
+        const contest = await Contest.findById(contestId).select("name").lean();
+        if (!contest) {
+            return res.status(404).json({ message: "Contest not found", success: false });
+        }
+        const contestName = contest.name;
+
+        // Step 3: Fetch and sort winners by rank
+        const winners = await userContest
+            .find({ contestId, status: "win" })
+            .populate("userId", "name") // Populate winner names
+            .sort({ rank: 1 }) // Sort by rank
+            .lean();
+
+        if (!winners.length) {
+            return res.status(404).json({ message: "No winners found for this contest", success: false });
+        }
+
+        // Step 4: Fetch all prizes for the contest based on contestId
+        const prizes = await Prize.find({ contestId }).sort({ rank: 1 }).lean();
+
+        if (!prizes.length) {
+            return res.status(404).json({ message: "No prizes found for this contest", success: false });
+        }
+
+        // Step 5: Fetch all users excluding Admin and Contractor
+        const users = await userModel
+            .find({ name: { $nin: ["Admin User", "Contractor"] } }) // Exclude Admin and Contractor
+            .select("name phone")
+            .lean();
+
+        // Step 6: Send personalized notifications
+        const notifications = {};
+        for (const winner of winners) {
+            // Get the prize based on the winner's rank
+            const prize = prizes.find((p) => p.rank.toString() === winner.rank.toString());
+
+            if (prize) {
+                // Generate title and body with the rank in ordinal format and prize details
+                const title = `🏆🎉 बधाई हो! ${toCamelCase(winner.userId.name)}`;
+                const body = `🎉${toCamelCase(contestName)} लकी ड्रा में आपको 🏆 ${getOrdinal(winner.rank)} इनाम ${prize.name} मिला है! 🎊🎉`;
+
+                // await sendNotificationMessage("6752876af8dc263f5a3e291e", title, body, "winners");
+                for (const user of users) {
+                    try {
+                        // Send notification to each user (use your actual notification function here)
+                        await sendNotificationMessage(user._id, title, body, "winners");
+                        console.log(`Notification sent to ${user._id}: ${title}: ${body}`);
+
+                        // Add notification to results for this user
+                        if (!notifications[user.name]) notifications[user.name] = [];
+                        notifications[user.name].push(body);
+                    } catch (error) {
+                        console.error(`Failed to send notification to ${user.name} (${user.phone}): ${error.message}`);
+                    }
+                }
+            } else {
+                console.log(`No prize found for rank ${winner.rank} in contest ${contestName}`);
+            }
+        }
+
+        // Step 7: Return success response
+        return res.status(200).json({
+            message: "Notifications sent successfully to all users",
+            success: true,
+            notifications,
+        });
+    } catch (err) {
+        console.error(`Error in sendContestWinnerNotifications: ${err.message}`);
+        next(err); // Pass the error to the error handler middleware
     }
 };
 

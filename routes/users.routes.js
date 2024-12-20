@@ -44,6 +44,7 @@ import {
     googleLoginTest,
     verifyOtp,
     phoneOtpgenerate,
+    blockUser,
 } from "../controllers/users.controller";
 import { authorizeJwt } from "../middlewares/auth.middleware";
 import { sendSingleNotificationMiddleware } from "../middlewares/fcm.middleware";
@@ -53,6 +54,7 @@ router.post("/google-signIn", googleLogin);
 router.post("/refresh-token", refreshToken);
 router.get("/check-token", authorizeJwt, (req, res) => res.json({ valid: true }));
 router.post("/register", registerUser);
+router.post('/toggle-block', blockUser);
 router.get("/applyReward/:id", authorizeJwt, applyRewards);
 router.get("/getUserReferralsReportById/:id", getUserReferralsReportById);
 router.get("/getUserReferralsReports", getUsersReferralsReport);

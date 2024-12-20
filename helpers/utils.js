@@ -164,6 +164,64 @@ export async function sendWhatsAppMessage(templateName, to, body_1, body_2, body
     }
 }
 
+
+
+export async function sendWhatsAppMessageContestWinners(to, contestName, winnersList) {
+    console.log("Winner contest notification:", to, "contestName",contestName,"winner lists", winnersList);
+
+    const payload = {
+        integrated_number: "918200025803",
+        content_type: "template",
+        payload: {
+            messaging_product: "whatsapp",
+            type: "template",
+            template: {
+                name: "lucky_draw_winners",
+                language: {
+                    code: "en",
+                    policy: "deterministic",
+                },
+                namespace: "19289588_241c_4c3e_ae9c_c7a527b1b4d2", // Replace with your namespace ID
+                to_and_components: [
+                    {
+                        to: [`91${to}`], // Must be an array of phone numbers
+                        components: {
+                            body_1: {
+                                type: "text",
+                                value: "test", // Maps to {{1}}
+                            },
+                            body_2: {
+                                type: "text",
+                                value: "winnersList", // Maps to {{2}}
+                            },
+                        },
+                    },
+                ],
+            },
+        },
+    };
+    
+    try {
+        const response = await axios.post(
+            "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/",
+            payload,
+            {
+                headers: {
+                    authkey: "418451AzKt9qoMmlL664c674fP1", // Your authkey
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
+        console.log("WhatsApp message sent successfully:", response.data);
+        return response.data;
+    } catch (error) {
+        console.error("Error sending WhatsApp message:", error.response ? error.response.data : error.message);
+        throw error; // Re-throw to handle errors upstream
+    }
+}
+
+
 export async function sendWhatsAppMessageForBankTransfer(body_1, body_2, body_3, body_4, body_5, body_6) {
     const payload = {
         integrated_number: "918200025803",
@@ -323,7 +381,6 @@ export async function sendWhatsAppMessageForOTP(phone, otp) {
         console.error("Error sending WhatsApp message:", error);
     }
 }
-
 
 // export async function sendWhatsAppMessageForOTP(phone, otp) {
 //     const payload = {
