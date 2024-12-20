@@ -41,7 +41,7 @@ router.get("/getCurrentContest", authorizeJwt, getCurrentContest);
 router.post("/luckyDraw/:id", authorizeJwt, luckyDraw);
 router.get("/previousContest", authorizeJwt, previousContest);
 router.get("/currentContest", authorizeJwt, currentContest);
-router.get("/rewardNotificationWinners/:contestId", sendContestWinnerNotifications);
+// router.get("/rewardNotificationWinners/:contestId", sendContestWinnerNotifications);
 router.get("/currentContestRewards", getCurrentContestRewards);
 router.get("/previousContestRewards", getPreviousContestRewards);
 router.get('/openContest', getOpenContests);

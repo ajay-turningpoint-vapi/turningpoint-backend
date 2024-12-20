@@ -1468,87 +1468,87 @@ const toCamelCase = (str) => {
         .join("");
 };
 
-export const sendContestWinnerNotifications = async (req, res, next) => {
-    const { contestId } = req.params;
+// export const sendContestWinnerNotifications = async (req, res, next) => {
+//     const { contestId } = req.params;
 
-    try {
-        // Step 1: Validate contestId
-        if (!contestId) {
-            return res.status(400).json({ message: "Contest ID is required", success: false });
-        }
+//     try {
+//         // Step 1: Validate contestId
+//         if (!contestId) {
+//             return res.status(400).json({ message: "Contest ID is required", success: false });
+//         }
 
-        // Step 2: Fetch the contest details
-        const contest = await Contest.findById(contestId).select("name").lean();
-        if (!contest) {
-            return res.status(404).json({ message: "Contest not found", success: false });
-        }
-        const contestName = contest.name;
+//         // Step 2: Fetch the contest details
+//         const contest = await Contest.findById(contestId).select("name").lean();
+//         if (!contest) {
+//             return res.status(404).json({ message: "Contest not found", success: false });
+//         }
+//         const contestName = contest.name;
 
-        // Step 3: Fetch and sort winners by rank
-        const winners = await userContest
-            .find({ contestId, status: "win" })
-            .populate("userId", "name") // Populate winner names
-            .sort({ rank: 1 }) // Sort by rank
-            .lean();
+//         // Step 3: Fetch and sort winners by rank
+//         const winners = await userContest
+//             .find({ contestId, status: "win" })
+//             .populate("userId", "name") // Populate winner names
+//             .sort({ rank: 1 }) // Sort by rank
+//             .lean();
 
-        if (!winners.length) {
-            return res.status(404).json({ message: "No winners found for this contest", success: false });
-        }
+//         if (!winners.length) {
+//             return res.status(404).json({ message: "No winners found for this contest", success: false });
+//         }
 
-        // Step 4: Fetch all prizes for the contest based on contestId
-        const prizes = await Prize.find({ contestId }).sort({ rank: 1 }).lean();
+//         // Step 4: Fetch all prizes for the contest based on contestId
+//         const prizes = await Prize.find({ contestId }).sort({ rank: 1 }).lean();
 
-        if (!prizes.length) {
-            return res.status(404).json({ message: "No prizes found for this contest", success: false });
-        }
+//         if (!prizes.length) {
+//             return res.status(404).json({ message: "No prizes found for this contest", success: false });
+//         }
 
-        // Step 5: Fetch all users excluding Admin and Contractor
-        const users = await userModel
-            .find({ name: { $nin: ["Admin User", "Contractor"] } }) // Exclude Admin and Contractor
-            .select("name phone")
-            .lean();
+//         // Step 5: Fetch all users excluding Admin and Contractor
+//         const users = await userModel
+//             .find({ name: { $nin: ["Admin User", "Contractor"] } }) // Exclude Admin and Contractor
+//             .select("name phone")
+//             .lean();
 
-        // Step 6: Send personalized notifications
-        const notifications = {};
-        for (const winner of winners) {
-            // Get the prize based on the winner's rank
-            const prize = prizes.find((p) => p.rank.toString() === winner.rank.toString());
+//         // Step 6: Send personalized notifications
+//         const notifications = {};
+//         for (const winner of winners) {
+//             // Get the prize based on the winner's rank
+//             const prize = prizes.find((p) => p.rank.toString() === winner.rank.toString());
 
-            if (prize) {
-                // Generate title and body with the rank in ordinal format and prize details
-                const title = `🏆🎉 बधाई हो! ${toCamelCase(winner.userId.name)}`;
-                const body = `🎉${toCamelCase(contestName)} लकी ड्रा में आपको 🏆 ${getOrdinal(winner.rank)} इनाम ${prize.name} मिला है! 🎊🎉`;
+//             if (prize) {
+//                 // Generate title and body with the rank in ordinal format and prize details
+//                 const title = `🏆🎉 बधाई हो! ${toCamelCase(winner.userId.name)}`;
+//                 const body = `🎉${toCamelCase(contestName)} लकी ड्रा में आपको 🏆 ${getOrdinal(winner.rank)} इनाम ${prize.name} मिला है! 🎊🎉`;
 
-                // await sendNotificationMessage("6752876af8dc263f5a3e291e", title, body, "winners");
-                for (const user of users) {
-                    try {
-                        // Send notification to each user (use your actual notification function here)
-                        await sendNotificationMessage(user._id, title, body, "winners");
-                        console.log(`Notification sent to ${user._id}: ${title}: ${body}`);
+//                 // await sendNotificationMessage("6752876af8dc263f5a3e291e", title, body, "winners");
+//                 for (const user of users) {
+//                     try {
+//                         // Send notification to each user (use your actual notification function here)
+//                         await sendNotificationMessage(user._id, title, body, "winners");
+//                         console.log(`Notification sent to ${user._id}: ${title}: ${body}`);
 
-                        // Add notification to results for this user
-                        if (!notifications[user.name]) notifications[user.name] = [];
-                        notifications[user.name].push(body);
-                    } catch (error) {
-                        console.error(`Failed to send notification to ${user.name} (${user.phone}): ${error.message}`);
-                    }
-                }
-            } else {
-                console.log(`No prize found for rank ${winner.rank} in contest ${contestName}`);
-            }
-        }
+//                         // Add notification to results for this user
+//                         if (!notifications[user.name]) notifications[user.name] = [];
+//                         notifications[user.name].push(body);
+//                     } catch (error) {
+//                         console.error(`Failed to send notification to ${user.name} (${user.phone}): ${error.message}`);
+//                     }
+//                 }
+//             } else {
+//                 console.log(`No prize found for rank ${winner.rank} in contest ${contestName}`);
+//             }
+//         }
 
-        // Step 7: Return success response
-        return res.status(200).json({
-            message: "Notifications sent successfully to all users",
-            success: true,
-            notifications,
-        });
-    } catch (err) {
-        console.error(`Error in sendContestWinnerNotifications: ${err.message}`);
-        next(err); // Pass the error to the error handler middleware
-    }
-};
+//         // Step 7: Return success response
+//         return res.status(200).json({
+//             message: "Notifications sent successfully to all users",
+//             success: true,
+//             notifications,
+//         });
+//     } catch (err) {
+//         console.error(`Error in sendContestWinnerNotifications: ${err.message}`);
+//         next(err); // Pass the error to the error handler middleware
+//     }
+// };
 
 export const getPreviousContestRewards = async (req, res, next) => {
     try {
