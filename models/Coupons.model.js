@@ -11,7 +11,7 @@ let Coupons = mongoose.Schema(
         location: {
             type: {
                 type: String,
-                enum: ["Point"], 
+                enum: ["Point"],
                 // required: true,
             },
             coordinates: {
@@ -20,6 +20,8 @@ let Coupons = mongoose.Schema(
             },
         },
         scanLocation: String,
+        scannedUserName: String,
+        scannedEmail: String,
     },
 
     { timestamps: true }

@@ -17,6 +17,10 @@ import {
     joinContestByCoupon,
     getContestCoupons,
     getAllContest,
+    rewardNotificationWinners,
+    sendContestNotifications,
+    sendContestWinnerNotifications,
+    getOpenContests,
 } from "../controllers/contest.controller";
 let router = express.Router();
 import { authorizeJwt } from "../middlewares/auth.middleware";
@@ -37,6 +41,8 @@ router.get("/getCurrentContest", authorizeJwt, getCurrentContest);
 router.post("/luckyDraw/:id", authorizeJwt, luckyDraw);
 router.get("/previousContest", authorizeJwt, previousContest);
 router.get("/currentContest", authorizeJwt, currentContest);
+router.get("/rewardNotificationWinners/:contestId", sendContestWinnerNotifications);
 router.get("/currentContestRewards", getCurrentContestRewards);
 router.get("/previousContestRewards", getPreviousContestRewards);
+router.get('/openContest', getOpenContests);
 export default router;

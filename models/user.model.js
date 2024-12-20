@@ -9,6 +9,7 @@ let User = mongoose.Schema(
         phone: { type: String, required: true, unique: true },
         name: String,
         businessName: String,
+        actualAddress: { type: String },
         contractor: {
             name: String,
             businessName: String,
@@ -19,7 +20,6 @@ let User = mongoose.Schema(
             phone: String,
         },
 
-        
         pincode: String,
 
         password: { type: String },
@@ -54,7 +54,11 @@ let User = mongoose.Schema(
         // visitingCard: { type: String },
         fcmToken: { type: String, required: true },
         refCode: { type: String, unique: true },
-       
+        isBlocked: {
+            type: Boolean,
+            default: false,
+        },
+
         // address: {
         //     type: {
         //         type: String,
@@ -62,7 +66,6 @@ let User = mongoose.Schema(
         //     },
         //     coordinates: [Number],
         // },
-        // actualAddress: { type: String },
         // location: {
         //     type: {
         //         type: String,
@@ -71,11 +74,6 @@ let User = mongoose.Schema(
         //     coordinates: {
         //         type: [Number],
         //     },
-        // },
-
-        // version: {
-        //     type: Number,
-        //     default: 0,
         // },
         referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
         referralRewards: [{ type: mongoose.Schema.Types.ObjectId, ref: "ReferralRewards" }],

@@ -421,14 +421,36 @@ export const registerUser = async (req, res, next) => {
 
         await Token.create({ uid: newUser.uid, userId: newUser._id, token: accessToken, refreshToken, fcmToken: newUser?.fcmToken });
 
-        const registrationTitle = "🎉 Congratulations and Welcome to Turning Point!";
-        const registrationBody = `👏 Woohoo, ${newUser.name}! You did it! 🌟 Welcome to the Turning Point community! 🚀 Get ready to immerse yourself in a world of excitement and opportunities! Enjoy watching captivating reels, exploring exclusive offers, enrolling in thrilling lucky draw contests, and much more! 💪 We're thrilled to have you on board, and we can't wait to share all the amazing experiences ahead! Let's dive in and make every moment unforgettable! 🌈`;
+        const registrationTitle = "🎉 Turning Point में आपका स्वागत है!";
+        const registrationBody = `👏 बधाई हो, ${newUser.name}! 🚀 अब रोमांचक रील्स, एक्सक्लूसिव ऑफर्स और लकी ड्रा का हिस्सा बनें! तैयार हो जाइए, मज़ा आने वाला है! 🌟🎉`;
         await sendNotificationMessage(newUser._id, registrationTitle, registrationBody, "New User");
         sendWhatsAppMessage("newuser", "918975944936", newUser.name, newUser.phone, newUser.email);
         res.status(200).json({ message: "User Created", data: newUser, token: accessToken, status: true });
     } catch (error) {
         console.error("register user", error);
         next(error);
+    }
+};
+
+export const blockUser = async (req, res, next) => {
+    try {
+        const { userId } = req.body;
+
+        const user = await Users.findById(userId);
+        // Toggle the isBlocked field
+        user.isBlocked = !user.isBlocked;
+
+        // Save the updated user
+        await user.save();
+
+        // Return a success response
+        res.status(200).json({
+            message: `User ${user.isBlocked ? "blocked" : "unblocked"} successfully.`,
+            isBlocked: user.isBlocked,
+        });
+    } catch (error) {
+        console.error("Error toggling block status:", error);
+        res.status(500).json({ message: "Internal server error." });
     }
 };
 
@@ -842,13 +864,13 @@ export const updateUserStatus = async (req, res, next) => {
         next();
 
         if (status === false) {
-            const title = "🛑 Attention: Profile Disabled by Admin";
-            const body = `Uh-oh! It appears that your profile has been temporarily disabled by the admin. 🚫 We understand that this may come as a surprise, but rest assured, we're here to help! Please reach out to our support team for assistance and clarification on why your profile was disabled. We're committed to resolving any issues and ensuring that you have the best experience possible. Thank you for your understanding and cooperation.`;
+            const title = "🛑 ध्यान दें: प्रोफाइल को एडमिन ने डिसेबल किया";
+            const body = "आपकी प्रोफाइल डिसेबल हो गई है। सहायता के लिए संपर्क करें।";
 
             await sendNotificationMessage(userId, title, body, "User Status");
         } else {
-            const title = "🌟 Congratulations! Your Profile is Approved!";
-            const body = `🎉 Great news! Your profile has been approved by the admin! 🚀 Welcome aboard! You're now part of our vibrant community, where exciting opportunities await you. 🌈 Explore, connect, and make the most of your experience with us! Thank you for joining us on this journey. Let's create amazing moments together! ✨`;
+            const title = "🌟 बधाई हो! आपका प्रोफ़ाइल मंज़ूर हो गया है!";
+            const body = "🎉 आपका प्रोफ़ाइल मंज़ूर हो गया! स्वागत है!";
 
             await sendNotificationMessage(userId, title, body, "User Status");
         }
@@ -869,15 +891,15 @@ export const updateUserKycStatus = async (req, res, next) => {
         res.status(201).json({ message: "User KYC Status Updated Successfully", success: true });
         next();
         if (kycStatus === "approved") {
-            const title = "🎉 Congratulations! Your KYC is Approved!";
-            const body = `👏 Hooray! We're excited to announce that your KYC (Know Your Customer) verification has been successfully approved! 🎉 Get ready to unlock a world of exciting opportunities, including exclusive lucky draws, amazing rewards, and much more! 🌟 Thank you for being part of our community, and enjoy the incredible benefits that await you! 🥳`;
+            const title = "🎉 बधाई हो! आपकी KYC मंज़ूर हो गई!";
+            const body = "👏 आपकी KYC मंज़ूर! अब मज़ेदार इनाम पाएं!";
             await sendNotificationMessage(userId, title, body, "kyc");
 
             next();
         }
         if (kycStatus === "rejected") {
-            const title = "🚫 KYC Submission Rejected";
-            const body = `Uh-oh! It seems there was an issue with your KYC submission, and it has been rejected. 😔 Don't worry though! Our team is here to help. Please take a moment to review your submission and make any necessary updates. Once you're ready, feel free to resubmit, and we'll do our best to assist you every step of the way! 🛠️ Thank you for your understanding and cooperation.`;
+            const title = "🚫 KYC सबमिशन अस्वीकृत";
+            const body = "😔 KYC अस्वीकृत! कृपया फिर से सबमिट करें।";
             await sendNotificationMessage(userId, title, body, "kyc");
             next();
         }
@@ -1192,32 +1214,31 @@ export const getUserById = async (req, res, next) => {
         userObj.contestWonCount = contestWonCount;
         userObj.contestUniqueWonCount = contestUniqueWonCount?.length ? contestUniqueWonCount?.length : 0;
 
-
-        if (req.query.contestId && req.query.contestId !== 'null') {
+        if (req.query.contestId && req.query.contestId !== "null") {
             const contestId = req.query.contestId;
-        
+
             try {
                 // Fetch the contest by the provided contestId
                 const contestObj = await Contest.findById(contestId).exec();
-        
+
                 if (!contestObj) {
                     userObj.autoJoinStatus = "Contest not found";
                 } else {
                     // Check if the user has enough points to join the contest
                     const requiredPoints = contestObj.points || 0; // Default to 0 if no points specified
-        
+
                     if (userObj.points >= requiredPoints) {
                         const joinCount = Math.floor(userObj.points / requiredPoints); // Calculate how many times user can join
-        
+
                         for (let i = 0; i < joinCount; i++) {
                             await autoJoinContest(contestId, userObj._id);
                         }
-        
+
                         // Deduct points after joining the contest
                         const totalPointsUsed = joinCount * requiredPoints;
                         userObj.points -= totalPointsUsed;
                         await Users.updateOne({ _id: userObj._id }, { points: userObj.points });
-        
+
                         // Refresh user data
                         userObj = await Users.findById(req.params.id).lean().exec();
                         userObj.autoJoinStatus = `User auto-joined the contest ${joinCount} times`;
@@ -1233,7 +1254,7 @@ export const getUserById = async (req, res, next) => {
             userObj.autoJoinStatus = "No contest ID provided";
             console.log(userObj.autoJoinStatus);
         }
-        
+
         res.status(200).json({ message: "User found", data: userObj, success: true });
     } catch (error) {
         console.error(error);

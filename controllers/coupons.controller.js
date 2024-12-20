@@ -98,6 +98,13 @@ export const getAllCoupons = async (req, res, next) => {
         if (req.query.productId) {
             query.productId = req.query.productId;
         }
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search, "i"); // Case-insensitive regex for partial matching
+            query.$or = [
+                { name: searchRegex }, // Match by coupon name
+                { productName: searchRegex }, // Match by product name (nested)
+            ];
+        }
 
         let totalCount = await Coupon.countDocuments(query); // Get total count of documents matching query
 
@@ -219,7 +226,7 @@ export const getActiveCoupons = async (req, res, next) => {
         todayStart.setHours(0, 0, 0);
 
         // Find coupons based on maximumNoOfUsersAllowed and productName (if provided)
-        query.maximumNoOfUsersAllowed = 1
+        query.maximumNoOfUsersAllowed = 1;
 
         if (req.query.productName) {
             query.productName = req.query.productName; // Add productName to query if provided
@@ -228,6 +235,33 @@ export const getActiveCoupons = async (req, res, next) => {
         let CouponArr = await Coupon.find(query).lean().exec();
 
         res.status(200).json({ message: "active coupons", data: CouponArr, success: true });
+    } catch (error) {
+        console.error(error);
+        next(error);
+    }
+};
+
+export const getUsedCouponsforMap = async (req, res, next) => {
+    try {
+        const { productName, name } = req.query; // Get search parameters from query string
+
+        // Build the query object with the base filter and any search parameters
+        const query = {
+            maximumNoOfUsersAllowed: 0, // Filter for coupons where maximumNoOfUsersAllowed is 0
+        };
+
+        // Add search conditions if provided
+        if (productName) {
+            query.productName = { $regex: productName, $options: "i" }; // Case-insensitive search
+        }
+        if (name) {
+            query.name = { $regex: name, $options: "i" }; // Case-insensitive search
+        }
+
+        // Fetch the coupons based on the dynamic query
+        let CouponArr = await Coupon.find(query).lean().exec();
+
+        res.status(200).json({ message: "List of scanned coupons", data: CouponArr, success: true });
     } catch (error) {
         console.error(error);
         next(error);
@@ -493,9 +527,9 @@ export const addMultipleCoupons = async (req, res, next) => {
 
 export const applyCoupon = async (req, res, next) => {
     try {
-        const { id } = req.params;
-        const { userId } = req.user;
-        console.log(id);
+        const { id, latitude, longitude } = req.body;
+        const { userId, name, email } = req.user;
+
         const findArr = mongoose.isValidObjectId(id) ? [{ _id: id }, { name: id }] : [{ name: id }];
         console.log(findArr);
 
@@ -512,7 +546,7 @@ export const applyCoupon = async (req, res, next) => {
             return res.status(400).json({ message: "Coupon has already been applied" });
         }
 
-        await Coupon.findByIdAndUpdate(CouponObj._id, { maximumNoOfUsersAllowed: 0 }).exec();
+        await Coupon.findByIdAndUpdate(CouponObj._id, { maximumNoOfUsersAllowed: 0, scannedUserName: name, scannedEmail: email, location: { type: "Point", coordinates: [longitude, latitude] } }).exec();
         const points = CouponObj.value;
 
         if (points !== 0) {
@@ -526,7 +560,7 @@ export const applyCoupon = async (req, res, next) => {
 
             res.status(200).json({ message: "Coupon applied", success: true, points });
         } else {
-            res.status(200).json({ message: "Coupon applied, better luck next time", success: true, points });
+            res.status(200).json({ message: "Better luck next time", success: true, points });
         }
     } catch (err) {
         console.error("Error in applyCoupon:", err);
